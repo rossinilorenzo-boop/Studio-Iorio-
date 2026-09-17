@@ -66,7 +66,22 @@
   .btn{font:inherit;font-weight:700;border:none;border-radius:12px;padding:11px 18px;cursor:pointer;transition:.15s}
   .btn.primary{background:var(--cyan);color:#00343c}.btn.primary:hover{background:var(--cyan-l)}.btn.ghost{background:#fff;border:1.5px solid var(--line2);color:var(--ink2)}.btn.ghost:hover{border-color:var(--cyan)}
   .btn.danger{background:#fbece8;border:1.5px solid #e3a99c;color:#a23823}.btn.danger:hover{background:#f6d9d0}
-  .btn.danger{background:#fbece8;border:1.5px solid #e3a99c;color:#a23823}.btn.danger:hover{background:#f6d9d0}
+  .visittabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  .vtab{padding:8px 12px;border-radius:10px;border:1.5px solid var(--line2);background:#fff;cursor:pointer;font-weight:700;color:var(--ink2);font-size:.85rem;display:flex;flex-direction:column;align-items:flex-start;line-height:1.25}
+  .vtab small{color:var(--ink3);font-weight:600;font-size:.72rem}
+  .vtab.on{background:var(--cyan);color:#00343c;border-color:var(--cyan)}.vtab.on small{color:#00343c}
+  .vtab.new{border-style:dashed;color:var(--cyan-d)}
+  .visitmeta{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+  .visitmeta label{font-size:.86rem;color:var(--ink2);font-weight:600;display:flex;align-items:center;gap:8px}
+  .visitmeta input[type=date]{font:inherit;border:1.5px solid var(--line2);border-radius:9px;padding:6px 9px}
+  .comparebar{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px}
+  .comparebar label{font-size:.86rem;font-weight:600;color:var(--ink2);display:flex;flex-direction:column;gap:5px}
+  .comparebar select{font:inherit;border:1.5px solid var(--line2);border-radius:9px;padding:8px 10px}
+  table.diff{width:100%;border-collapse:collapse;margin-top:6px;font-size:.9rem}
+  table.diff th{text-align:left;color:var(--ink3);font-size:.76rem;text-transform:uppercase;letter-spacing:.05em;padding:6px 8px;border-bottom:1.5px solid var(--line)}
+  table.diff td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  table.diff td.old{color:#a23823;text-decoration:line-through;opacity:.75}
+  table.diff td.new{color:#1a7a4c;font-weight:700}
   /* form clinico */
   .form{display:grid;grid-template-columns:1fr;gap:16px;margin-top:4px}@media(min-width:640px){.form{grid-template-columns:1fr 1fr}}
   .f label{font-weight:600;font-size:.95rem;display:block;margin-bottom:6px}
@@ -371,6 +386,19 @@ function hasData(o){return o&&Object.keys(o).some(k=>{const v=o[k];return v!=nul
 /* raccoglie le note voce-per-voce (per stampa/report) */
 function collectNotes(val){const out=[];[["Odontoiatra",ODO,(val.odontoiatra||{})],["Fisioterapista",FISIO,(val.fisioterapista||{})]].forEach(([sez,fields,data])=>{fields.forEach(f=>{if(f.t==="grp")return;const n=data[f.n+"__nota"];if(n)out.push({sez,label:f.l,nota:n});});});return out;}
 
+/* confronta i dati di due visite per un dato set di campi (ODO o FISIO) e restituisce le differenze */
+function diffFields(fields,a,b){
+  a=a||{};b=b||{};const out=[];
+  fields.forEach(f=>{
+    if(f.t==="grp")return;
+    const av=a[f.n],bv=b[f.n];
+    const an=Array.isArray(av)?av.join(", "):(av==null?"":String(av));
+    const bn=Array.isArray(bv)?bv.join(", "):(bv==null?"":String(bv));
+    if(an!==bn)out.push({label:f.l,a:an||"\u2014",b:bn||"\u2014"});
+  });
+  return out;
+}
+
 /* ===== Inquadramento assistito (IA) — supporto alla decisione, NON diagnosi ===== */
 async function callAI(payload){
   const prompt=
@@ -411,27 +439,61 @@ function PatientSheet({p,token,onClose,onDeleted}){
       onClose();
     }catch(e){setDelErr(String(e.message||e));}finally{setDelBusy(false);}
   }
-  useEffect(()=>{let go=true;(async()=>{let d={};if(SUPABASE_URL&&token){try{d=await loadValRemote(p.id,token);}catch(e){d={};}}else{d=loadValLocal(p.id);}if(go){setVal(d||{});if(d&&d.ai)setAi(d.ai);}})();return()=>{go=false;};},[p.id]);
+  const [activeVisitId,setActiveVisitId]=useState(null);
+  const [cmpA,setCmpA]=useState(null);const [cmpB,setCmpB]=useState(null);
+  useEffect(()=>{let go=true;(async()=>{let d={};if(SUPABASE_URL&&token){try{d=await loadValRemote(p.id,token);}catch(e){d={};}}else{d=loadValLocal(p.id);}d=d||{};
+    if(!d.visite||!d.visite.length){
+      if(d.odontoiatra||d.fisioterapista||d.semg){
+        d={...d,visite:[{id:"v1",data:(d.updated_at||new Date().toISOString()).slice(0,10),odontoiatra:d.odontoiatra||{},fisioterapista:d.fisioterapista||{},semg:d.semg||{}}]};
+      }else{
+        d={...d,visite:[{id:"v1",data:new Date().toISOString().slice(0,10),odontoiatra:{},fisioterapista:{},semg:{}}]};
+      }
+    }else{
+      const anyHasSemg=d.visite.some(vi=>vi.semg&&(hasData(vi.semg.pre)||hasData(vi.semg.post)));
+      if(!anyHasSemg&&d.semg&&(hasData(d.semg.pre)||hasData(d.semg.post))){
+        const last=d.visite.length-1;
+        d={...d,visite:d.visite.map((vi,i)=>i===last?{...vi,semg:d.semg}:vi)};
+      }
+    }
+    if(go){setVal(d);setActiveVisitId(d.visite[d.visite.length-1].id);if(d.ai)setAi(d.ai);}})();return()=>{go=false;};},[p.id]);
   const flags=useMemo(()=>computeFlags(p.answers),[p.answers]);
-  const clinFlags=useMemo(()=>computeClinicalFlags(val||{}),[val]);
+  const v=val||{};
+  const visite=v.visite||[];
+  const activeVisit=visite.find(x=>x.id===activeVisitId)||visite[visite.length-1]||{odontoiatra:{},fisioterapista:{}};
+  const lastVisit=visite[visite.length-1]||{};
+  const clinFlags=useMemo(()=>computeClinicalFlags({odontoiatra:lastVisit.odontoiatra,fisioterapista:lastVisit.fisioterapista,semg:lastVisit.semg}),[visite]);
   const allFlags=[...flags,...clinFlags];
   const grid=interdisciplinare(allFlags);const rep=reportClinico(p.answers,allFlags);
   const exams=p.answers.esami_paths||p.answers.esami_files||[];
-  const v=val||{};
-  const setODO=(k,x)=>setVal(s=>({...s,odontoiatra:{...((s||{}).odontoiatra||{}),[k]:x}}));
-  const setFIS=(k,x)=>setVal(s=>({...s,fisioterapista:{...((s||{}).fisioterapista||{}),[k]:x}}));
-  const setSE=(fase,k,x)=>setVal(s=>({...s,semg:{...((s||{}).semg||{}),[fase]:{...(((s||{}).semg||{})[fase]||{}),[k]:x}}}));
+  const setODO=(k,x)=>setVal(s=>({...s,visite:(s.visite||[]).map(vi=>vi.id===activeVisitId?{...vi,odontoiatra:{...(vi.odontoiatra||{}),[k]:x}}:vi)}));
+  const setFIS=(k,x)=>setVal(s=>({...s,visite:(s.visite||[]).map(vi=>vi.id===activeVisitId?{...vi,fisioterapista:{...(vi.fisioterapista||{}),[k]:x}}:vi)}));
+  const setSE=(fase,k,x)=>setVal(s=>({...s,visite:(s.visite||[]).map(vi=>vi.id===activeVisitId?{...vi,semg:{...(vi.semg||{}),[fase]:{...(((vi.semg||{})[fase])||{}),[k]:x}}}:vi)}));
+  function addVisit(){const nv={id:"v"+Date.now(),data:new Date().toISOString().slice(0,10),odontoiatra:{},fisioterapista:{}};setVal(s=>({...s,visite:[...(s.visite||[]),nv]}));setActiveVisitId(nv.id);}
+  function setVisitDate(d){setVal(s=>({...s,visite:(s.visite||[]).map(vi=>vi.id===activeVisitId?{...vi,data:d}:vi)}));}
+  function deleteVisit(id){
+    if(visite.length<=1){alert("Deve restare almeno una visita.");return;}
+    if(!window.confirm("Eliminare questa visita? L'operazione non e reversibile."))return;
+    const remaining=visite.filter(x=>x.id!==id);
+    setVal(s=>({...s,visite:remaining}));
+    if(activeVisitId===id)setActiveVisitId(remaining[remaining.length-1].id);
+  }
+  function VisitBar(){return(<div className="visittabs">
+    {visite.map((vi,i)=>(<button key={vi.id} className={"vtab"+(vi.id===activeVisitId?" on":"")} onClick={()=>setActiveVisitId(vi.id)}>Visita {i+1}<small>{vi.data?dfmt(vi.data):"senza data"}</small></button>))}
+    <button className="vtab new" onClick={addVisit}>{"+"} Nuova visita</button>
+  </div>);}
   const [ai,setAi]=useState(null);const [aiBusy,setAiBusy]=useState(false);const [aiErr,setAiErr]=useState("");
   async function save(){const dati={...v,updated_at:new Date().toISOString()};let ok;if(SUPABASE_URL&&token){ok=await saveValRemote(p.id,dati,token);}else{ok=saveValLocal(p.id,dati);}setSaved(ok?"Valutazione salvata":"Errore di salvataggio");setTimeout(()=>setSaved(""),2600);}
   async function genAI(){setAiErr("");setAiBusy(true);try{
     const payload={percorso:p.percorso,eta:ageFrom(p.data_nascita),anamnesi:p.answers,
       flag:allFlags.map(x=>({dominio:x.dominio,livello:x.livello,etichetta:x.etichetta,fonte:x.fonte})),
-      odontoiatra:v.odontoiatra||{},fisioterapista:v.fisioterapista||{},semg:v.semg||{}};
+      odontoiatra:lastVisit.odontoiatra||{},fisioterapista:lastVisit.fisioterapista||{},semg:lastVisit.semg||{}};
     const out=await callAI(payload);setAi(out);
   }catch(e){setAiErr(String(e.message||e));}finally{setAiBusy(false);}}
   async function saveAI(){const dati={...v,ai,updated_at:new Date().toISOString()};setVal(s=>({...s,ai}));let ok;if(SUPABASE_URL&&token){ok=await saveValRemote(p.id,dati,token);}else{ok=saveValLocal(p.id,dati);}setSaved(ok?"Inquadramento salvato nel report":"Errore di salvataggio");setTimeout(()=>setSaved(""),2600);}
-  const TABS=[["report","Anamnesi & report"],["odo","Odontoiatra"],["fisio","Fisioterapista"],["semg","sEMG"],["ai","Sintesi IA"]];
-  const done={odo:hasData(v.odontoiatra),fisio:hasData(v.fisioterapista),semg:hasData((v.semg||{}).pre)||hasData((v.semg||{}).post)};
+  const TABS=[["report","Anamnesi & report"],["odo","Odontoiatra"],["fisio","Fisioterapista"],["confronto","Confronto visite"],["semg","sEMG"],["ai","Sintesi IA"]];
+  const done={odo:hasData(activeVisit.odontoiatra),fisio:hasData(activeVisit.fisioterapista),semg:hasData((activeVisit.semg||{}).pre)||hasData((activeVisit.semg||{}).post)};
+  const cmpAId=cmpA||(visite[visite.length-2]&&visite[visite.length-2].id)||(visite[0]&&visite[0].id);
+  const cmpBId=cmpB||(visite[visite.length-1]&&visite[visite.length-1].id);
   return (
     <div className="overlay" onClick={onClose}>
       <div className="sheet" onClick={e=>e.stopPropagation()}>
@@ -456,26 +518,71 @@ function PatientSheet({p,token,onClose,onDeleted}){
             <div className="repsec"><h3>4 \u00b7 Bandiere rosse / da approfondire</h3>{rep.red.length?<div className="redbox"><ul>{rep.red.map((x,i)=><li key={i}><b>{x.etichetta}</b> <Src f={x.fonte} />{x.dettaglio?" \u2014 "+x.dettaglio:""}</li>)}</ul></div>:<ul><li>Nessuna bandiera rossa rilevata.</li></ul>}</div>
             <div className="repsec"><h3>5 \u00b7 Priorita di valutazione in studio</h3>{rep.priorita.length?<ol>{rep.priorita.map((d,i)=><li key={i}><b>{d.dominio}</b> <span className={"dot "+d.livello}></span> \u2014 {d.nota} <Srcs list={d.fonti} /></li>)}</ol>:<ul><li>Protocollo SSDC standard.</li></ul>}</div>
             {exams.length>0&&<div className="repsec"><h3>Allegati del paziente</h3>{exams.map((e,i)=>{const nm=typeof e==="string"?e:e.name;return(<div className="exam" key={i}><span className="fi">{(nm.split(".").pop()||"").toUpperCase().slice(0,4)}</span><span>{nm}</span></div>);})}</div>}
-            {(()=>{const ns=collectNotes(v);return ns.length>0?(<div className="repsec"><h3>Note dei clinici (voce per voce)</h3><ul>{ns.map((x,i)=><li key={i}><b>{x.label}</b> <Src f={x.sez} /> \u2014 {x.nota}</li>)}</ul></div>):null;})()}
+            {(()=>{const ns=collectNotes({odontoiatra:lastVisit.odontoiatra,fisioterapista:lastVisit.fisioterapista});return ns.length>0?(<div className="repsec"><h3>Note dei clinici (voce per voce)</h3><ul>{ns.map((x,i)=><li key={i}><b>{x.label}</b> <Src f={x.sez} /> \u2014 {x.nota}</li>)}</ul></div>):null;})()}
           </div>}
 
           {tab==="odo"&&<div>
             <h2>Valutazione odontoiatrica</h2>
-            {val===null?<p className="note">Caricamento\u2026</p>:<ClinForm fields={ODO} data={v.odontoiatra||{}} onSet={setODO} />}
+            <VisitBar />
+            {val!==null&&<div className="visitmeta"><label>Data di questa visita <input type="date" value={activeVisit.data||""} onChange={e=>setVisitDate(e.target.value)} /></label>{visite.length>1&&<button className="notebtn" onClick={()=>deleteVisit(activeVisitId)}>Elimina questa visita</button>}</div>}
+            {val===null?<p className="note">Caricamento\u2026</p>:<ClinForm fields={ODO} data={activeVisit.odontoiatra||{}} onSet={setODO} />}
             <div className="savebar"><button className="btn primary" onClick={save}>Salva valutazione</button>{saved&&<span className="savemsg">{saved}</span>}</div>
           </div>}
 
           {tab==="fisio"&&<div>
             <h2>Valutazione fisioterapica</h2>
-            {val===null?<p className="note">Caricamento\u2026</p>:<ClinForm fields={FISIO} data={v.fisioterapista||{}} onSet={setFIS} />}
+            <VisitBar />
+            {val!==null&&<div className="visitmeta"><label>Data di questa visita <input type="date" value={activeVisit.data||""} onChange={e=>setVisitDate(e.target.value)} /></label>{visite.length>1&&<button className="notebtn" onClick={()=>deleteVisit(activeVisitId)}>Elimina questa visita</button>}</div>}
+            {val===null?<p className="note">Caricamento\u2026</p>:<ClinForm fields={FISIO} data={activeVisit.fisioterapista||{}} onSet={setFIS} />}
             <div className="savebar"><button className="btn primary" onClick={save}>Salva valutazione</button>{saved&&<span className="savemsg">{saved}</span>}</div>
+          </div>}
+
+          {tab==="confronto"&&<div>
+            <h2>Confronto tra visite</h2>
+            <p className="note" style={{marginTop:4,marginBottom:0}}>Mostra solo le voci che sono cambiate tra le due visite selezionate.</p>
+            {visite.length<2?<p className="note">Servono almeno due visite per confrontare i dati. Aggiungine una dalla scheda Odontoiatra o Fisioterapista.</p>:<>
+              <div className="comparebar">
+                <label>Visita A<select value={cmpAId} onChange={e=>setCmpA(e.target.value)}>{visite.map((vi,i)=><option key={vi.id} value={vi.id}>Visita {i+1} ({vi.data?dfmt(vi.data):"senza data"})</option>)}</select></label>
+                <label>Visita B<select value={cmpBId} onChange={e=>setCmpB(e.target.value)}>{visite.map((vi,i)=><option key={vi.id} value={vi.id}>Visita {i+1} ({vi.data?dfmt(vi.data):"senza data"})</option>)}</select></label>
+              </div>
+              {(()=>{
+                const A=visite.find(x=>x.id===cmpAId)||{};const B=visite.find(x=>x.id===cmpBId)||{};
+                const dO=diffFields(ODO,A.odontoiatra,B.odontoiatra);
+                const dF=diffFields(FISIO,A.fisioterapista,B.fisioterapista);
+                if(!dO.length&&!dF.length)return <p className="note">Nessuna differenza rilevata tra le due visite selezionate.</p>;
+                return (<>
+                  {dO.length>0&&<div className="repsec"><h3>Odontoiatra \u2014 differenze</h3><table className="diff"><thead><tr><th>Voce</th><th>Visita A</th><th>Visita B</th></tr></thead><tbody>{dO.map((r,i)=><tr key={i}><td>{r.label}</td><td className="old">{r.a}</td><td className="new">{r.b}</td></tr>)}</tbody></table></div>}
+                  {dF.length>0&&<div className="repsec"><h3>Fisioterapista \u2014 differenze</h3><table className="diff"><thead><tr><th>Voce</th><th>Visita A</th><th>Visita B</th></tr></thead><tbody>{dF.map((r,i)=><tr key={i}><td>{r.label}</td><td className="old">{r.a}</td><td className="new">{r.b}</td></tr>)}</tbody></table></div>}
+                </>);
+              })()}
+            </>}
           </div>}
 
           {tab==="semg"&&<div>
             <h2>Elettromiografia di superficie (sEMG)</h2>
-            <p className="note" style={{marginTop:0}}>Inserire i valori pre e post trattamento. VN = valori normali di riferimento.</p>
-            {val===null?<p className="note">Caricamento\u2026</p>:<SemgMatrix data={v.semg||{}} onSet={setSE} />}
+            <p className="note" style={{marginTop:0}}>Inserire i valori pre e post trattamento per questa visita. VN = valori normali di riferimento.</p>
+            <VisitBar />
+            {val!==null&&<div className="visitmeta"><label>Data di questa visita <input type="date" value={activeVisit.data||""} onChange={e=>setVisitDate(e.target.value)} /></label>{visite.length>1&&<button className="notebtn" onClick={()=>deleteVisit(activeVisitId)}>Elimina questa visita</button>}</div>}
+            {val===null?<p className="note">Caricamento\u2026</p>:<SemgMatrix data={activeVisit.semg||{}} onSet={setSE} />}
             <div className="savebar"><button className="btn primary" onClick={save}>Salva valutazione</button><button className="btn ghost" onClick={()=>window.print()}>Stampa / PDF</button>{saved&&<span className="savemsg">{saved}</span>}</div>
+            {visite.length>1&&<div className="repsec">
+              <h3>Andamento sEMG su tutte le visite</h3>
+              <p className="note" style={{marginTop:0}}>Confronto dei valori pre/post registrati in ciascuna visita.</p>
+              <div style={{overflowX:"auto"}}>
+              <table className="semg">
+                <thead>
+                  <tr><th>Indice</th><th>VN</th>{visite.map((vi,i)=><th key={vi.id} colSpan={2} style={{textAlign:"center"}}>Visita {i+1}<br/><small style={{fontWeight:400,textTransform:"none"}}>{vi.data?dfmt(vi.data):""}</small></th>)}</tr>
+                  <tr><th></th><th></th>{visite.map(vi=><React.Fragment key={vi.id}><th>Pre</th><th>Post</th></React.Fragment>)}</tr>
+                </thead>
+                <tbody>
+                  {SEMG.map(s=>(<tr key={s.n}><td>{s.l}</td><td className="vn">{s.vn}</td>
+                    {visite.map(vi=>{const pre=vi.semg&&vi.semg.pre&&vi.semg.pre[s.n];const post=vi.semg&&vi.semg.post&&vi.semg.post[s.n];
+                      return <React.Fragment key={vi.id}><td>{pre!=null&&pre!==""?pre:"\u2014"}</td><td>{post!=null&&post!==""?post:"\u2014"}</td></React.Fragment>;})}
+                  </tr>))}
+                </tbody>
+              </table>
+              </div>
+            </div>}
           </div>}
 
           {tab==="ai"&&<div>
