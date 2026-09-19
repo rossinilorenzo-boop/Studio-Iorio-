@@ -99,6 +99,22 @@
   .diagspec-item textarea:focus{border-color:var(--cyan)}
   .docupload{margin-bottom:8px;display:flex;align-items:center;gap:10px}
   .doclist{display:flex;flex-direction:column;gap:6px}
+  .exerform{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+  .exerform input,.exerform select{font:inherit;border:1.5px solid var(--line2);border-radius:9px;padding:8px 10px;outline:none}
+  .exerform input:first-child{flex:2;min-width:160px}
+  .diagspec-item>input{font:inherit;border:1.5px solid var(--line2);border-radius:9px;padding:8px 10px;width:100%;margin-top:8px;outline:none}
+  .liblist{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+  .libitem{display:flex;justify-content:space-between;align-items:center;gap:10px;border:1.5px solid var(--line2);border-radius:12px;padding:10px 14px;background:#fff;flex-wrap:wrap}
+  .libitem small{color:var(--ink3)}
+  .exercgrid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:8px}
+  @media(min-width:680px){.exercgrid{grid-template-columns:1fr 1fr}}
+  .exercard{border:1.5px solid var(--line2);border-radius:14px;padding:14px 16px;background:#fff}
+  .exercard-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  .exercard-head b{font-family:"Fraunces",serif;font-size:1rem}
+  .exercard-meta{color:var(--cyan-d);font-weight:700;font-size:.82rem;margin:4px 0}
+  .exercard p{color:var(--ink2);font-size:.9rem;margin:6px 0}
+  .exercard a{color:var(--cyan-d);font-weight:700;font-size:.86rem;text-decoration:none}
+  .exercard a:hover{text-decoration:underline}
   /* form clinico */
   .form{display:grid;grid-template-columns:1fr;gap:16px;margin-top:4px}@media(min-width:640px){.form{grid-template-columns:1fr 1fr}}
   .f label{font-weight:600;font-size:.95rem;display:block;margin-bottom:6px}
@@ -497,6 +513,11 @@ async function uploadDocumento(file,path,token){const r=await fetch(`${SUPABASE_
 async function getSignedUrl(path,token){const r=await fetch(`${SUPABASE_URL}/storage/v1/object/sign/${DOCS_BUCKET}/${encodeURIComponent(path)}`,{method:"POST",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({expiresIn:3600})});if(!r.ok)return null;const j=await r.json();return j.signedURL?`${SUPABASE_URL}/storage/v1${j.signedURL}`:null;}
 async function deleteDocumento(path,token){const r=await fetch(`${SUPABASE_URL}/storage/v1/object/${DOCS_BUCKET}/${encodeURIComponent(path)}`,{method:"DELETE",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token}});return r.ok;}
 async function saveAnswersRemote(id,answers,token){const r=await fetch(`${SUPABASE_URL}/rest/v1/submissions?id=eq.${id}`,{method:"PATCH",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({answers})});return r.ok;}
+const FREQUENZE_ESERCIZI=["Ogni giorno","2 volte al giorno","3 volte a settimana","1 volta al giorno","Ogni 2/3 ore","Altro"];
+function loadLibreriaLocal(){try{return JSON.parse(localStorage.getItem("ssdc_libreria_esercizi")||"[]");}catch(e){return [];}}
+function saveLibreriaLocal(list){try{localStorage.setItem("ssdc_libreria_esercizi",JSON.stringify(list));return true;}catch(e){return false;}}
+async function loadLibreriaRemote(token){const r=await fetch(`${SUPABASE_URL}/rest/v1/libreria_esercizi?id=eq.1&select=dati`,{headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token}});if(!r.ok)return [];const j=await r.json();return (j[0]&&j[0].dati)||[];}
+async function saveLibreriaRemote(list,token){const r=await fetch(`${SUPABASE_URL}/rest/v1/libreria_esercizi?on_conflict=id`,{method:"POST",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token,"Content-Type":"application/json",Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({id:1,dati:list,updated_at:new Date().toISOString()})});return r.ok;}
 async function deletePatientRemote(id,token){await fetch(`${SUPABASE_URL}/rest/v1/valutazioni?submission_id=eq.${id}`,{method:"DELETE",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token}});const r=await fetch(`${SUPABASE_URL}/rest/v1/submissions?id=eq.${id}`,{method:"DELETE",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token}});return r.ok;}
 
 /* ===== API lettura pazienti ===== */
@@ -712,6 +733,16 @@ function PatientSheet({p,token,onClose,onDeleted,onAnswersUpdated}){
     <button className="vtab new" onClick={addVisit}>{"+"} Nuova visita</button>
   </div>);}
   const [ai,setAi]=useState(null);const [aiBusy,setAiBusy]=useState(false);const [aiErr,setAiErr]=useState("");
+  const [libreria,setLibreria]=useState(null);
+  useEffect(()=>{let go=true;(async()=>{let l=[];if(SUPABASE_URL&&token){try{l=await loadLibreriaRemote(token);}catch(e){l=[];}}else{l=loadLibreriaLocal();}if(go)setLibreria(l);})();return()=>{go=false;};},[]);
+  async function saveLibreria(newList){setLibreria(newList);if(SUPABASE_URL&&token){await saveLibreriaRemote(newList,token);}else{saveLibreriaLocal(newList);}}
+  const [nuovoEs,setNuovoEs]=useState({nome:"",icona:"",frequenza:"Ogni giorno",dettaglio_frequenza:"",descrizione:"",video:""});
+  function aggiungiInLibreria(){if(!nuovoEs.nome)return;saveLibreria([...(libreria||[]),{...nuovoEs,id:"ex"+Date.now()}]);setNuovoEs({nome:"",icona:"",frequenza:"Ogni giorno",dettaglio_frequenza:"",descrizione:"",video:""});}
+  function rimuoviDallaLibreria(id){if(!window.confirm("Rimuovere questo esercizio dalla libreria? Non tocca i programmi gia assegnati ai pazienti."))return;saveLibreria((libreria||[]).filter(e=>e.id!==id));}
+  function assegnaAlPaziente(es){setVal(s=>({...s,programma_esercizi:[...(s.programma_esercizi||[]),{...es,assignedId:"a"+Date.now()}]}));}
+  function rimuoviDalPaziente(assignedId){setVal(s=>({...s,programma_esercizi:(s.programma_esercizi||[]).filter(e=>e.assignedId!==assignedId)}));}
+  const [nuovoEsPersonale,setNuovoEsPersonale]=useState({nome:"",icona:"",frequenza:"Ogni giorno",dettaglio_frequenza:"",descrizione:"",video:""});
+  function aggiungiPersonalizzatoAlPaziente(){if(!nuovoEsPersonale.nome)return;setVal(s=>({...s,programma_esercizi:[...(s.programma_esercizi||[]),{...nuovoEsPersonale,assignedId:"a"+Date.now()}]}));setNuovoEsPersonale({nome:"",icona:"",frequenza:"Ogni giorno",dettaglio_frequenza:"",descrizione:"",video:""});}
   async function save(){const dati={...v,updated_at:new Date().toISOString()};let ok;if(SUPABASE_URL&&token){ok=await saveValRemote(p.id,dati,token);}else{ok=saveValLocal(p.id,dati);}setSaved(ok?"Valutazione salvata":"Errore di salvataggio");setTimeout(()=>setSaved(""),2600);}
   async function genAI(){setAiErr("");setAiBusy(true);try{
     const payload={percorso:p.percorso,eta:ageFrom(p.data_nascita),anamnesi:answers,
@@ -720,7 +751,7 @@ function PatientSheet({p,token,onClose,onDeleted,onAnswersUpdated}){
     const out=await callAI(payload);setAi(out);
   }catch(e){setAiErr(String(e.message||e));}finally{setAiBusy(false);}}
   async function saveAI(){const dati={...v,ai,updated_at:new Date().toISOString()};setVal(s=>({...s,ai}));let ok;if(SUPABASE_URL&&token){ok=await saveValRemote(p.id,dati,token);}else{ok=saveValLocal(p.id,dati);}setSaved(ok?"Inquadramento salvato nel report":"Errore di salvataggio");setTimeout(()=>setSaved(""),2600);}
-  const TABS=[["report","Anamnesi & report"],["specialisti","Altri specialisti"],["odo","Odontoiatra"],["triage","Serve il fisio?"],["fisio","Fisioterapista"],["triage2","Serve l'odontoiatra?"],["confronto","Confronto visite"],["semg","sEMG"],["ai","Sintesi IA"]];
+  const TABS=[["report","Anamnesi & report"],["specialisti","Altri specialisti"],["odo","Odontoiatra"],["triage","Serve il fisio?"],["fisio","Fisioterapista"],["triage2","Serve l'odontoiatra?"],["confronto","Confronto visite"],["semg","sEMG"],["esercizi","Programma esercizi"],["ai","Sintesi IA"]];
   const done={odo:hasData(activeVisit.odontoiatra),fisio:hasData(activeVisit.fisioterapista),semg:hasData((activeVisit.semg||{}).pre)||hasData((activeVisit.semg||{}).post)};
   const cmpAId=cmpA||(visite[visite.length-2]&&visite[visite.length-2].id)||(visite[0]&&visite[0].id);
   const cmpBId=cmpB||(visite[visite.length-1]&&visite[visite.length-1].id);
@@ -879,6 +910,67 @@ function PatientSheet({p,token,onClose,onDeleted,onAnswersUpdated}){
               </table>
               </div>
             </div>}
+          </div>}
+
+          {tab==="esercizi"&&<div>
+            <h2>Programma esercizi</h2>
+            <p className="note" style={{marginTop:4}}>Crea il programma personalizzato per il paziente, pescando dalla libreria condivisa o aggiungendo esercizi su misura.</p>
+
+            <div className="repsec" style={{borderTop:"none",paddingTop:0}}>
+              <h3>Libreria esercizi (condivisa tra tutti i pazienti)</h3>
+              <div className="diagspec-item">
+                <div className="exerform">
+                  <input placeholder="Nome esercizio" value={nuovoEs.nome} onChange={e=>setNuovoEs({...nuovoEs,nome:e.target.value})} />
+                  <input placeholder="Emoji (facoltativa)" value={nuovoEs.icona} onChange={e=>setNuovoEs({...nuovoEs,icona:e.target.value})} style={{maxWidth:110}} />
+                  <select value={nuovoEs.frequenza} onChange={e=>setNuovoEs({...nuovoEs,frequenza:e.target.value})}>{FREQUENZE_ESERCIZI.map(f=><option key={f} value={f}>{f}</option>)}</select>
+                  <input placeholder="Dettaglio (es. 2\u00d710, 3-5 minuti)" value={nuovoEs.dettaglio_frequenza} onChange={e=>setNuovoEs({...nuovoEs,dettaglio_frequenza:e.target.value})} />
+                </div>
+                <textarea placeholder="Descrizione / istruzioni\u2026" value={nuovoEs.descrizione} onChange={e=>setNuovoEs({...nuovoEs,descrizione:e.target.value})} />
+                <input placeholder="Link video (facoltativo)" value={nuovoEs.video} onChange={e=>setNuovoEs({...nuovoEs,video:e.target.value})} />
+                <div className="savebar" style={{marginTop:10}}><button className="btn primary" onClick={aggiungiInLibreria}>{"+"} Salva in libreria</button></div>
+              </div>
+              {libreria===null?<p className="note">Caricamento libreria\u2026</p>:libreria.length===0?<p className="note">Nessun esercizio in libreria. Aggiungine uno sopra.</p>:
+                <div className="liblist">{libreria.map(es=>(<div className="libitem" key={es.id}>
+                  <div><b>{es.icona?es.icona+" ":""}{es.nome}</b><small> \u00b7 {es.frequenza}{es.dettaglio_frequenza?" \u00b7 "+es.dettaglio_frequenza:""}</small></div>
+                  <div style={{display:"flex",gap:8}}>
+                    <button className="btn ghost" onClick={()=>assegnaAlPaziente(es)}>{"+"} Assegna</button>
+                    <button className="notebtn" onClick={()=>rimuoviDallaLibreria(es.id)}>{"\u2715"}</button>
+                  </div>
+                </div>))}</div>}
+            </div>
+
+            <div className="repsec">
+              <h3>Aggiungi esercizio su misura per questo paziente</h3>
+              <p className="note" style={{marginTop:0}}>Non viene salvato in libreria, resta solo nel programma di questo paziente.</p>
+              <div className="diagspec-item">
+                <div className="exerform">
+                  <input placeholder="Nome esercizio" value={nuovoEsPersonale.nome} onChange={e=>setNuovoEsPersonale({...nuovoEsPersonale,nome:e.target.value})} />
+                  <input placeholder="Emoji" value={nuovoEsPersonale.icona} onChange={e=>setNuovoEsPersonale({...nuovoEsPersonale,icona:e.target.value})} style={{maxWidth:110}} />
+                  <select value={nuovoEsPersonale.frequenza} onChange={e=>setNuovoEsPersonale({...nuovoEsPersonale,frequenza:e.target.value})}>{FREQUENZE_ESERCIZI.map(f=><option key={f} value={f}>{f}</option>)}</select>
+                  <input placeholder="Dettaglio" value={nuovoEsPersonale.dettaglio_frequenza} onChange={e=>setNuovoEsPersonale({...nuovoEsPersonale,dettaglio_frequenza:e.target.value})} />
+                </div>
+                <textarea placeholder="Descrizione / istruzioni\u2026" value={nuovoEsPersonale.descrizione} onChange={e=>setNuovoEsPersonale({...nuovoEsPersonale,descrizione:e.target.value})} />
+                <input placeholder="Link video (facoltativo)" value={nuovoEsPersonale.video} onChange={e=>setNuovoEsPersonale({...nuovoEsPersonale,video:e.target.value})} />
+                <div className="savebar" style={{marginTop:10}}><button className="btn primary" onClick={aggiungiPersonalizzatoAlPaziente}>{"+"} Aggiungi al programma</button></div>
+              </div>
+            </div>
+
+            <div className="repsec">
+              <h3>Programma assegnato a {p.nome}</h3>
+              {(!v.programma_esercizi||v.programma_esercizi.length===0)?<p className="note">Nessun esercizio ancora assegnato.</p>:
+                Object.entries((v.programma_esercizi||[]).reduce((acc,es)=>{(acc[es.frequenza||"Altro"]=acc[es.frequenza||"Altro"]||[]).push(es);return acc;},{})).map(([freq,list])=>(
+                  <div key={freq} style={{marginBottom:16}}>
+                    <div className="grp" style={{borderTop:"none",paddingTop:0}}>{freq}</div>
+                    <div className="exercgrid">{list.map((es,i)=>(<div className="exercard" key={es.assignedId||i}>
+                      <div className="exercard-head"><b>{es.icona?es.icona+" ":""}{es.nome}</b><button className="notebtn" onClick={()=>rimuoviDalPaziente(es.assignedId)}>{"\u2715"}</button></div>
+                      {es.dettaglio_frequenza&&<div className="exercard-meta">{es.dettaglio_frequenza}</div>}
+                      {es.descrizione&&<p>{es.descrizione}</p>}
+                      {es.video&&<a href={es.video} target="_blank" rel="noreferrer">{"\u25B6"} Guarda il video</a>}
+                    </div>))}</div>
+                  </div>
+                ))}
+              <div className="savebar"><button className="btn primary" onClick={save}>Salva programma</button><button className="btn ghost" onClick={()=>window.print()}>Stampa / PDF</button>{saved&&<span className="savemsg">{saved}</span>}</div>
+            </div>
           </div>}
 
           {tab==="ai"&&<div>
