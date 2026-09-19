@@ -231,6 +231,32 @@ function triageOdonto(anamnesiFlags,visitClinFlags){
   return {livello,motivi:rilevanti};
 }
 
+/* ===== Diagnosi di specialisti gia consultati -> segnali sui domini del quadro =====
+   Fa "parlare" le diagnosi registrate (anamnesi + visite) con i semafori: una diagnosi
+   ortopedica pregressa, ad esempio, pesa sul dominio Postura insieme agli altri segnali. */
+const SPECIALISTA_DOMINIO_MAP=[
+  [/ortoped/i,"Postura"],
+  [/reumatolog/i,"Postura"],
+  [/osteopat/i,"Postura"],
+  [/neurolog/i,"Cervicale"],
+  [/otorino|\borl\b/i,"Respirazione"],
+  [/pneumolog|sonno/i,"Respirazione"],
+  [/logoped/i,"Occlusione"],
+  [/maxillo.?facciale|chirurgo orale/i,"ATM"],
+];
+function dominioPerSpecialista(nome){
+  if(!nome)return null;
+  for(const [re,dom] of SPECIALISTA_DOMINIO_MAP){if(re.test(nome))return dom;}
+  return null;
+}
+function flagsDaSpecialisti(anamnesiList,odontoList,fisioList){
+  const out=[];const add=(dominio,etichetta,dettaglio,fonte)=>out.push({dominio,livello:"giallo",etichetta,dettaglio:dettaglio||"",fonte});
+  (anamnesiList||[]).forEach(d=>{const dom=dominioPerSpecialista(d.specialista);if(dom&&d.specialista)add(dom,"Diagnosi pregressa: "+d.specialista,(d.files&&d.files.length?d.files.length+" documento/i allegato/i.":""),"Anamnesi");});
+  (odontoList||[]).forEach(d=>{const dom=dominioPerSpecialista(d.specialista);if(dom&&d.specialista)add(dom,"Diagnosi "+d.specialista+" riferita",d.sintesi||"","Odontoiatra");});
+  (fisioList||[]).forEach(d=>{const dom=dominioPerSpecialista(d.specialista);if(dom&&d.specialista)add(dom,"Diagnosi "+d.specialista+" riferita",d.sintesi||"","Fisioterapista");});
+  return out;
+}
+
 /* ===== Altri specialisti da consultare =====
    Incrocia anamnesi + esame odontoiatrico + esame fisioterapico dell'ultima visita
    per suggerire figure esterne al percorso SSDC (non sostituisce il giudizio clinico). */
@@ -660,12 +686,14 @@ function PatientSheet({p,token,onClose,onDeleted,onAnswersUpdated}){
   const activeVisit=visite.find(x=>x.id===activeVisitId)||visite[visite.length-1]||{odontoiatra:{},fisioterapista:{}};
   const lastVisit=visite[visite.length-1]||{};
   const clinFlags=useMemo(()=>computeClinicalFlags({odontoiatra:lastVisit.odontoiatra,fisioterapista:lastVisit.fisioterapista,semg:lastVisit.semg}),[visite]);
-  const allFlags=[...flags,...clinFlags];
+  const specialistiFlagsUltimaVisita=useMemo(()=>flagsDaSpecialisti(answers.diagnosi_specialisti,(lastVisit.odontoiatra||{}).diagnosi_specialisti,(lastVisit.fisioterapista||{}).diagnosi_specialisti),[answers,lastVisit]);
+  const allFlags=[...flags,...clinFlags,...specialistiFlagsUltimaVisita];
   const specialisti=useMemo(()=>suggerisciSpecialisti(allFlags,answers,lastVisit),[allFlags,answers,lastVisit]);
   const grid=interdisciplinare(allFlags);const rep=reportClinico(answers,allFlags);
   const activeClinFlags=useMemo(()=>computeClinicalFlags({odontoiatra:activeVisit.odontoiatra,fisioterapista:activeVisit.fisioterapista,semg:activeVisit.semg}),[activeVisit]);
-  const triage=useMemo(()=>triageFisio(flags,activeClinFlags),[flags,activeClinFlags]);
-  const triageOd=useMemo(()=>triageOdonto(flags,activeClinFlags),[flags,activeClinFlags]);
+  const specialistiFlagsVisitaAttiva=useMemo(()=>flagsDaSpecialisti(answers.diagnosi_specialisti,(activeVisit.odontoiatra||{}).diagnosi_specialisti,(activeVisit.fisioterapista||{}).diagnosi_specialisti),[answers,activeVisit]);
+  const triage=useMemo(()=>triageFisio(flags,[...activeClinFlags,...specialistiFlagsVisitaAttiva]),[flags,activeClinFlags,specialistiFlagsVisitaAttiva]);
+  const triageOd=useMemo(()=>triageOdonto(flags,[...activeClinFlags,...specialistiFlagsVisitaAttiva]),[flags,activeClinFlags,specialistiFlagsVisitaAttiva]);
   const exams=answers.esami_paths||answers.esami_files||[];
   const setODO=(k,x)=>setVal(s=>({...s,visite:(s.visite||[]).map(vi=>vi.id===activeVisitId?{...vi,odontoiatra:{...(vi.odontoiatra||{}),[k]:x}}:vi)}));
   const setFIS=(k,x)=>setVal(s=>({...s,visite:(s.visite||[]).map(vi=>vi.id===activeVisitId?{...vi,fisioterapista:{...(vi.fisioterapista||{}),[k]:x}}:vi)}));
