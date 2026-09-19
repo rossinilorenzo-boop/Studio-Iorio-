@@ -181,7 +181,7 @@ function correlazioni(a){const c=[];
   if(a.trauma==="si"&&has(a,"sintomi","vertigini"))c.push("Trauma + vertigini -> valutare cervicale alta (CFRT) e sfera vestibolare.");
   if(!c.length)c.push("Nessuna correlazione evidente dall'anamnesi. Confermare con i test in studio.");return c;}
 const DOMINI=["ATM","Cervicale","Occlusione","Bruxismo","Sonno","Respirazione","Postura","Trauma"];const rank={rosso:3,giallo:2,verde:1};
-function interdisciplinare(flags){return DOMINI.map(d=>{const ff=flags.filter(f=>f.dominio===d);let lvl="verde",note="Nessun segnale dall'anamnesi.",fonti=[];if(ff.length){ff.sort((a,b)=>rank[b.livello]-rank[a.livello]);lvl=ff[0].livello;note=ff.map(x=>x.etichetta).join(" \u00b7 ");fonti=[...new Set(ff.map(x=>x.fonte).filter(Boolean))];}return{dominio:d,livello:lvl,nota:note,fonti};});}
+function interdisciplinare(flags){return DOMINI.map(d=>{const ff=flags.filter(f=>f.dominio===d);let lvl="verde",note="Nessun segnale dall'anamnesi.",fonti=[];if(ff.length){ff.sort((a,b)=>rank[b.livello]-rank[a.livello]);lvl=ff[0].livello;note=ff.map(x=>x.etichetta).join(" · ");fonti=[...new Set(ff.map(x=>x.fonte).filter(Boolean))];}return{dominio:d,livello:lvl,nota:note,fonti};});}
 
 /* ===== Triage fisioterapico per il paziente =====
    Semaforo semplice, pensato per essere spiegato al paziente durante la visita odontoiatrica:
@@ -307,8 +307,8 @@ function computeClinicalFlags(val){
   const N=x=>{const n=parseFloat(x);return isNaN(n)?null:n;};
   // --- Odontoiatra ---
   if(o.eccentrici==="Interferenza posteriore")add("Occlusione","giallo","Interferenza posteriore (eccentrici)","Mantiene i masseteri in iper-attivazione; ostacola il rilascio miofasciale.","Odontoiatra");
-  if(o.slide===">2 mm")add("Occlusione","rosso","Slide RC\u2013OC > 2 mm","Instabilita occlusale significativa (comune nei DTM).","Odontoiatra");
-  else if(o.slide==="1\u20132 mm")add("Occlusione","giallo","Slide RC\u2013OC 1\u20132 mm","Discrepanza da verificare (usura, dolore ATM).","Odontoiatra");
+  if(o.slide===">2 mm")add("Occlusione","rosso","Slide RC–OC > 2 mm","Instabilita occlusale significativa (comune nei DTM).","Odontoiatra");
+  else if(o.slide==="1–2 mm")add("Occlusione","giallo","Slide RC–OC 1–2 mm","Discrepanza da verificare (usura, dolore ATM).","Odontoiatra");
   if(o.crossbite&&o.crossbite!=="Assente")add("Occlusione","giallo","Crossbite "+o.crossbite,"Discrepanza trasversale.","Odontoiatra");
   const clickDx=o.atm_click_dx&&o.atm_click_dx!=="No", clickSx=o.atm_click_sx&&o.atm_click_sx!=="No";
   const dolAtm=o.atm_dolore_dx==="Si"||o.atm_dolore_sx==="Si"; const ap=N(o.apertura);
@@ -320,10 +320,10 @@ function computeClinicalFlags(val){
   if(o.frenulo_ling==="Kotlow III"||o.frenulo_ling==="Kotlow IV")add("Occlusione","giallo","Anchiloglossia ("+o.frenulo_ling+")","Limita la funzione linguale; valutare spinta/recidiva.","Odontoiatra");
   // --- Fisioterapista ---
   if(fi.romberg==="Positivo")add("Postura","giallo","Romberg positivo","Deficit propriocettivo/vestibolare: instabilita posturale.","Fisioterapista");
-  if(fi.fukuda_rot==="DX >30\u00b0"||fi.fukuda_rot==="SX >30\u00b0")add("Postura","giallo","Fukuda rotazione >30\u00b0","Asimmetria del controllo posturale dinamico.","Fisioterapista");
+  if(fi.fukuda_rot==="DX >30°"||fi.fukuda_rot==="SX >30°")add("Postura","giallo","Fukuda rotazione >30°","Asimmetria del controllo posturale dinamico.","Fisioterapista");
   if(N(fi.npc_bp)!=null&&N(fi.npc_bp)>10)add("Cervicale","giallo","NPC > 10 cm","Insufficienza di convergenza; possibile compenso posturale.","Fisioterapista");
   if(fi.crlf&&fi.crlf!=="Libero")add("Cervicale","giallo","Prima costa: "+fi.crlf,"Ipomobilita della prima costa (CRLF).","Fisioterapista");
-  if(fi.cfrt&&fi.cfrt!=="Libero")add("Cervicale","rosso","CFRT positivo ("+fi.cfrt+")","Sospetta cefalea cervicogenica (C1\u2013C2).","Fisioterapista");
+  if(fi.cfrt&&fi.cfrt!=="Libero")add("Cervicale","rosso","CFRT positivo ("+fi.cfrt+")","Sospetta cefalea cervicogenica (C1–C2).","Fisioterapista");
   if(fi.respirazione==="Clavicolare-alta")add("Respirazione","giallo","Respiro clavicolare alto","Sovraccarico dei muscoli accessori del collo.","Fisioterapista");
   if(fi.glatzel==="Scarso")add("Respirazione","giallo","Glatzel: flusso scarso","Ridotta pervieta nasale.","Fisioterapista");
   const trigMast=Math.max(N(fi.nrs_mass_dx)||0,N(fi.nrs_mass_sx)||0,N(fi.nrs_temp_dx)||0,N(fi.nrs_temp_sx)||0);
@@ -340,7 +340,7 @@ function computeClinicalFlags(val){
   else if(N(se.impact)!=null&&N(se.impact)<80)add("Dolore","giallo","IMPACT < 80% (inibizione)","Possibile dolore o ipotonia.","sEMG");
   if(N(se.asimmetria)!=null&&Math.abs(N(se.asimmetria))>10)add("Postura","giallo","Asimmetria > 10%","Baricentro muscolare spostato: il sistema pende da un lato.","sEMG");
   if(N(se.attivazione)!=null&&N(se.attivazione)>10)add("Cervicale","giallo","Attivazione anteriore (>10%)","Spesso legata a testa avanzata (FHP) / deep bite.","sEMG");
-  if(N(se.torsione)!=null&&Math.abs(N(se.torsione))>10)add("Cervicale","rosso","Torsione > 10%","Forza rotazionale: causa principale del blocco CRLF (C1\u2013C2).","sEMG");
+  if(N(se.torsione)!=null&&Math.abs(N(se.torsione))>10)add("Cervicale","rosso","Torsione > 10%","Forza rotazionale: causa principale del blocco CRLF (C1–C2).","sEMG");
   const bdx=N(se.bil_dx),bsx=N(se.bil_sx);
   if((bdx!=null&&Math.abs(bdx-50)>15)||(bsx!=null&&Math.abs(bsx-50)>15))add("Occlusione","giallo","Bilanciamento sbilanciato","Un lato esegue gran parte del lavoro meccanico.","sEMG");
   return f;
@@ -356,8 +356,8 @@ function dfmt(s){try{return new Date(s).toLocaleDateString("it-IT",{day:"2-digit
 const ANAMNESI=[
  {n:"__g1",t:"grp",l:"Sintomi"},
  {n:"sintomi",l:"Sintomi riferiti",t:"multi",o:[["cefalea_cervicalgia","Cefalea/cervicalgia"],["dolori_schiena","Dolori alla schiena"],["vertigini","Vertigini"],["dolore_atm","Dolore apertura/chiusura bocca"],["limitazione_apertura","Limitazione apertura orale"],["rumori_articolari","Rumori articolari"],["affaticamento_masticatorio","Affaticamento masticatorio"],["nessuno","Nessun sintomo"]]},
- {n:"nrs",l:"Intensita del dolore (NRS 0\u201310)",t:"scale10"},
- {n:"dolore_durata",l:"Da quanto tempo",t:"radio",o:[["meno_1_mese","<1 mese"],["1_6_mesi","1\u20136 mesi"],["oltre_6_mesi",">6 mesi"],["anni","Anni"]]},
+ {n:"nrs",l:"Intensita del dolore (NRS 0–10)",t:"scale10"},
+ {n:"dolore_durata",l:"Da quanto tempo",t:"radio",o:[["meno_1_mese","<1 mese"],["1_6_mesi","1–6 mesi"],["oltre_6_mesi",">6 mesi"],["anni","Anni"]]},
  {n:"dolore_sede",l:"Sede del dolore",t:"text",h:"Separa piu zone con una virgola, es. tempie, collo, mandibola"},
  {n:"__g2",t:"grp",l:"Respirazione e sonno"},
  {n:"respiro_giorno",l:"Respirazione prevalente di giorno",t:"radio",o:[["naso","Nasale"],["bocca","Orale"],["misto","Mista"]]},
@@ -393,13 +393,13 @@ const ODO=[
  {n:"opt_apicali",l:"Lesioni apicali",t:"radio",o:["Si","No"]},
  {n:"opt_condili",l:"Condili simmetrici",t:"radio",o:["Si","No"]},
  {n:"__g2",t:"grp",l:"Indici occlusali"},
- {n:"dmf_c",l:"DMF \u00b7 Cariati (C)",t:"number"},{n:"dmf_m",l:"DMF \u00b7 Mancanti (M)",t:"number"},
- {n:"dmf_o",l:"DMF \u00b7 Otturati (O)",t:"number"},{n:"dmf_tot",l:"DMF \u00b7 Totale",t:"number",h:"Basso <9 \u00b7 Medio 9\u201311 \u00b7 Alto >11"},
- {n:"angle_dx",l:"Classe di Angle \u00b7 DX",t:"radio",o:["I","II","III"]},{n:"angle_sx",l:"Classe di Angle \u00b7 SX",t:"radio",o:["I","II","III"]},
+ {n:"dmf_c",l:"DMF · Cariati (C)",t:"number"},{n:"dmf_m",l:"DMF · Mancanti (M)",t:"number"},
+ {n:"dmf_o",l:"DMF · Otturati (O)",t:"number"},{n:"dmf_tot",l:"DMF · Totale",t:"number",h:"Basso <9 · Medio 9–11 · Alto >11"},
+ {n:"angle_dx",l:"Classe di Angle · DX",t:"radio",o:["I","II","III"]},{n:"angle_sx",l:"Classe di Angle · SX",t:"radio",o:["I","II","III"]},
  {n:"overjet",l:"Overjet",t:"number",u:"mm"},{n:"overbite",l:"Overbite",t:"number",u:"mm"},
  {n:"arcata",l:"Morfologia arcata (trasversale)",t:"radio",o:["Triangolare (F)","Ovale (O)","Circolare (C)","Squadrata (OS)"]},
  {n:"palato",l:"Morfologia palato",t:"radio",o:["Normale","Stretto/ogivale","Largo e piatto","Asimmetrico"]},
- {n:"amcop",l:"Misurazione AMCOP (MV 16\u201326)",t:"number",u:"mm"},
+ {n:"amcop",l:"Misurazione AMCOP (MV 16–26)",t:"number",u:"mm"},
  {n:"crossbite",l:"Crossbite",t:"radio",o:["Assente","Mono DX","Mono SX","Bilaterale"]},
  {n:"mediana_sup",l:"Linea mediana superiore",t:"text",h:"es. 1mm verso dx"},{n:"mediana_inf",l:"Linea mediana inferiore",t:"text"},
  {n:"spee",l:"Curva di Spee",t:"radio",o:["Normale","Accentuata DX","Accentuata SX"]},
@@ -407,12 +407,12 @@ const ODO=[
  {n:"__g3",t:"grp",l:"Lingua, frenuli, labbra"},
  {n:"frenulo_ling",l:"Frenulo linguale (Kotlow)",t:"radio",o:["Normale","Kotlow I","Kotlow II","Kotlow III","Kotlow IV"]},
  {n:"frenulo_lab",l:"Frenulo labiale",t:"radio",o:["Classe I","Classe II","Classe III","Classe IV"]},
- {n:"lingua_vol",l:"Lingua \u00b7 volume",t:"radio",o:["Normale","Ridotta","Macroglossia"]},
- {n:"lingua_forma",l:"Lingua \u00b7 forma",t:"multi",o:["Normale","Fissurata","Carta geografica","Atrofica","Tonsilla ipertrofica","Patinata"]},
- {n:"lingua_funz",l:"Lingua \u00b7 funzione",t:"multi",o:["Protrusione mediana","Devia DX/SX","Eleva: spot","Eleva: no spot","Riposo alta","Riposo bassa"]},
+ {n:"lingua_vol",l:"Lingua · volume",t:"radio",o:["Normale","Ridotta","Macroglossia"]},
+ {n:"lingua_forma",l:"Lingua · forma",t:"multi",o:["Normale","Fissurata","Carta geografica","Atrofica","Tonsilla ipertrofica","Patinata"]},
+ {n:"lingua_funz",l:"Lingua · funzione",t:"multi",o:["Protrusione mediana","Devia DX/SX","Eleva: spot","Eleva: no spot","Riposo alta","Riposo bassa"]},
  {n:"labbra",l:"Competenza labiale",t:"radio",o:["Normale","Ipotono","Ipertono"]},
  {n:"__g4",t:"grp",l:"Dinamica mandibolare e ATM"},
- {n:"apertura",l:"Apertura massima",t:"number",u:"mm",h:"Normale 40\u201355 \u00b7 <40 limitazione"},
+ {n:"apertura",l:"Apertura massima",t:"number",u:"mm",h:"Normale 40–55 · <40 limitazione"},
  {n:"deviazione",l:"Deviazione in apertura",t:"radio",o:["Assente","Dev. DX","Dev. SX","Deflessione corretta","Deflessione non corretta"]},
  {n:"traiettoria",l:"Traiettoria",t:"radio",o:["Rettilinea","C","S"]},
  {n:"atm_click_dx",l:"ATM click DX",t:"radio",o:["No","Apertura","Chiusura","Apert.+chius."]},
@@ -421,20 +421,20 @@ const ODO=[
  {n:"__g5",t:"grp",l:"Occlusione e movimenti"},
  {n:"oc",l:"Contatti OC",t:"multi",o:["Anteriore","Post DX","Post SX","Diffusi"]},
  {n:"rc",l:"Contatti RC",t:"multi",o:["Anteriore","Post DX","Post SX","Diffusi"]},
- {n:"slide",l:"Slide in centric (RC\u2013OC)",t:"radio",o:["Assente","<1 mm","1\u20132 mm",">2 mm"]},
+ {n:"slide",l:"Slide in centric (RC–OC)",t:"radio",o:["Assente","<1 mm","1–2 mm",">2 mm"]},
  {n:"slide_dir",l:"Direzione slide",t:"multi",o:["Anteriore","Posteriore","Destra","Sinistra"]},
  {n:"eccentrici",l:"Movimenti eccentrici",t:"radio",o:["Libera (canina)","Interferenza posteriore","Libera incisiva"]},
- {n:"conclusione",l:"Conclusione \u00b7 problema prevalente",t:"multi",o:["Sagittale (II/III)","Trasversale (palato)","Verticale (deep/open)","Funzionale (lingua/respiro)"],wide:true},
+ {n:"conclusione",l:"Conclusione · problema prevalente",t:"multi",o:["Sagittale (II/III)","Trasversale (palato)","Verticale (deep/open)","Funzionale (lingua/respiro)"],wide:true},
  {n:"note",l:"Note libere (odontoiatra)",t:"textarea",wide:true},
 ];
 const FISIO=[
  {n:"__g1",t:"grp",l:"Biotipo ed equilibrio"},
  {n:"somatotipo",l:"Somatotipo",t:"radio",o:["Ectomorfo","Mesomorfo","Endomorfo"]},
- {n:"romberg",l:"Test di Romberg",t:"radio",o:["Negativo","Positivo"]},{n:"romberg_dir",l:"Romberg \u00b7 direzione",t:"text",h:"avanti/indietro/dx/sx"},
- {n:"fukuda_rot",l:"Fukuda \u00b7 rotazione",t:"radio",o:["DX <30\u00b0","DX >30\u00b0","SX <30\u00b0","SX >30\u00b0"]},
- {n:"fukuda_trasl",l:"Fukuda \u00b7 traslazione",t:"radio",o:["<50 cm",">50 cm"]},
- {n:"npc_bp",l:"NPC \u00b7 punto di rottura",t:"number",u:"cm",h:"<6 fisiologico \u00b7 >10 insufficienza"},
- {n:"npc_rulli",l:"NPC con rulli",t:"radio",o:["Migliora \u2192 occlusale","Invariato \u2192 oculare"]},
+ {n:"romberg",l:"Test di Romberg",t:"radio",o:["Negativo","Positivo"]},{n:"romberg_dir",l:"Romberg · direzione",t:"text",h:"avanti/indietro/dx/sx"},
+ {n:"fukuda_rot",l:"Fukuda · rotazione",t:"radio",o:["DX <30°","DX >30°","SX <30°","SX >30°"]},
+ {n:"fukuda_trasl",l:"Fukuda · traslazione",t:"radio",o:["<50 cm",">50 cm"]},
+ {n:"npc_bp",l:"NPC · punto di rottura",t:"number",u:"cm",h:"<6 fisiologico · >10 insufficienza"},
+ {n:"npc_rulli",l:"NPC con rulli",t:"radio",o:["Migliora → occlusale","Invariato → oculare"]},
  {n:"__g2",t:"grp",l:"Chewing test"},
  {n:"chewing_lato",l:"Lato di masticazione",t:"radio",o:["DX","SX","Assente"]},{n:"chewing_cicli",l:"Cicli",t:"radio",o:["Simmetrici","Asimmetrici"]},
  {n:"chewing_spinta",l:"Spinta linguale",t:"radio",o:["Si","No"]},{n:"chewing_labbra",l:"Attivazione labbra",t:"radio",o:["Si","No"]},
@@ -452,19 +452,19 @@ const FISIO=[
  {n:"glatzel",l:"Test di Glatzel",t:"radio",o:["Simmetrico","Prevalente DX","Prevalente SX","Scarso"]},
  {n:"arcaici",l:"Movimenti arcaici",t:"radio",o:["Fluido","Bloccato"]},
  {n:"viscerali",l:"Segni viscerali",t:"multi",o:["Tensioni viscerali","Fossa iliaca sx dolorabile","Alitosi"]},
- {n:"__g5",t:"grp",l:"Palpazione miofasciale (NRS 0\u201310)"},
+ {n:"__g5",t:"grp",l:"Palpazione miofasciale (NRS 0–10)"},
  {n:"nrs_mass_dx",l:"Massetere DX",t:"scale10"},{n:"nrs_mass_sx",l:"Massetere SX",t:"scale10"},
  {n:"nrs_temp_dx",l:"Temporale DX",t:"scale10"},{n:"nrs_temp_sx",l:"Temporale SX",t:"scale10"},
  {n:"nrs_scom_dx",l:"SCOM DX",t:"scale10"},{n:"nrs_scom_sx",l:"SCOM SX",t:"scale10"},
- {n:"conclusione",l:"Conclusione \u00b7 distretto prioritario",t:"multi",o:["Cervicale Alto","Cingolo Scapolare","Bacino","Globale"],wide:true},
+ {n:"conclusione",l:"Conclusione · distretto prioritario",t:"multi",o:["Cervicale Alto","Cingolo Scapolare","Bacino","Globale"],wide:true},
  {n:"note",l:"Note libere (fisioterapista)",t:"textarea",wide:true},
 ];
 const SEMG=[
- {n:"poc_medio",l:"POC medio",vn:"80\u2013100%"},{n:"poc_mm",l:"POC MM",vn:"80\u2013100%"},{n:"poc_ta",l:"POC TA",vn:"80\u2013100%"},
- {n:"impact",l:"IMPACT medio",vn:"80\u2013120%"},{n:"asimmetria",l:"Asimmetria",vn:"-10/+10%"},{n:"attivazione",l:"Attivazione",vn:"-10/+10%"},
+ {n:"poc_medio",l:"POC medio",vn:"80–100%"},{n:"poc_mm",l:"POC MM",vn:"80–100%"},{n:"poc_ta",l:"POC TA",vn:"80–100%"},
+ {n:"impact",l:"IMPACT medio",vn:"80–120%"},{n:"asimmetria",l:"Asimmetria",vn:"-10/+10%"},{n:"attivazione",l:"Attivazione",vn:"-10/+10%"},
  {n:"torsione",l:"Torsione",vn:"-10/+10%"},{n:"bil_dx",l:"Bilanciamento DX",vn:"~50%"},{n:"bil_sx",l:"Bilanciamento SX",vn:"~50%"},
- {n:"perf_mm_dx",l:"Performance MM DX",vn:"80\u2013120%"},{n:"perf_mm_sx",l:"Performance MM SX",vn:"80\u2013120%"},
- {n:"perf_ta_dx",l:"Performance TA DX",vn:"80\u2013120%"},{n:"perf_ta_sx",l:"Performance TA SX",vn:"80\u2013120%"},
+ {n:"perf_mm_dx",l:"Performance MM DX",vn:"80–120%"},{n:"perf_mm_sx",l:"Performance MM SX",vn:"80–120%"},
+ {n:"perf_ta_dx",l:"Performance TA DX",vn:"80–120%"},{n:"perf_ta_sx",l:"Performance TA SX",vn:"80–120%"},
 ];
 
 /* ===== pazienti DEMO ===== */
@@ -522,8 +522,8 @@ function ClinField({f,val,set}){
     {f.h&&<div className="h">{f.h}</div>}
     {f.t!=="textarea"&&<div className="fnote">
       {(openNote||note)
-        ?<input className="noteinput" placeholder="Nota clinica su questa voce\u2026" value={note} onChange={e=>set(noteKey,e.target.value)} />
-        :<button className="notebtn" onClick={()=>setOpenNote(true)}>{"\u270E"} Aggiungi nota</button>}
+        ?<input className="noteinput" placeholder="Nota clinica su questa voce…" value={note} onChange={e=>set(noteKey,e.target.value)} />
+        :<button className="notebtn" onClick={()=>setOpenNote(true)}>{"✎"} Aggiungi nota</button>}
     </div>}
   </div>);
 }
@@ -537,9 +537,9 @@ function DiagnosiSpecialistiTesto({list,onChange}){
     {items.map((it,i)=>(<div className="diagspec-item" key={i}>
       <div className="diagspec-row">
         <input list="specialisti-list" placeholder="Specialista (es. Cardiologo)" value={it.specialista||""} onChange={e=>update(i,"specialista",e.target.value)} />
-        <button className="notebtn" onClick={()=>remove(i)}>{"\u2715"} Rimuovi</button>
+        <button className="notebtn" onClick={()=>remove(i)}>{"✕"} Rimuovi</button>
       </div>
-      <textarea placeholder="Sintesi della diagnosi\u2026" value={it.sintesi||""} onChange={e=>update(i,"sintesi",e.target.value)} />
+      <textarea placeholder="Sintesi della diagnosi…" value={it.sintesi||""} onChange={e=>update(i,"sintesi",e.target.value)} />
     </div>))}
     <datalist id="specialisti-list">{SPECIALISTI_COMUNI.map(s=><option key={s} value={s} />)}</datalist>
     <button className="vtab new" onClick={add}>{"+"} Aggiungi diagnosi</button>
@@ -578,10 +578,10 @@ function DiagnosiDocumenti({list,onChange,patientId,token}){
     {items.map((it,i)=>(<div className="diagspec-item" key={i}>
       <div className="diagspec-row">
         <input list="specialisti-list" placeholder="Specialista (es. Cardiologo)" value={it.specialista||""} onChange={e=>update(i,"specialista",e.target.value)} />
-        <button className="notebtn" onClick={()=>removeEntry(i)}>{"\u2715"} Rimuovi</button>
+        <button className="notebtn" onClick={()=>removeEntry(i)}>{"✕"} Rimuovi</button>
       </div>
-      <div className="docupload"><input type="file" multiple onChange={e=>handleFiles(i,e.target.files)} disabled={busyIdx===i} />{busyIdx===i&&<span className="note">Caricamento\u2026</span>}</div>
-      {(it.files||[]).length>0&&<div className="doclist">{it.files.map((f,fi)=>(<div className="exam" key={fi}><span className="fi">{(f.name.split(".").pop()||"").toUpperCase().slice(0,4)}</span><span onClick={()=>openFile(f)} style={{cursor:"pointer",textDecoration:"underline"}}>{f.name}</span><button className="notebtn" onClick={()=>removeFile(i,fi)}>{"\u2715"}</button></div>))}</div>}
+      <div className="docupload"><input type="file" multiple onChange={e=>handleFiles(i,e.target.files)} disabled={busyIdx===i} />{busyIdx===i&&<span className="note">Caricamento…</span>}</div>
+      {(it.files||[]).length>0&&<div className="doclist">{it.files.map((f,fi)=>(<div className="exam" key={fi}><span className="fi">{(f.name.split(".").pop()||"").toUpperCase().slice(0,4)}</span><span onClick={()=>openFile(f)} style={{cursor:"pointer",textDecoration:"underline"}}>{f.name}</span><button className="notebtn" onClick={()=>removeFile(i,fi)}>{"✕"}</button></div>))}</div>}
     </div>))}
     <datalist id="specialisti-list">{SPECIALISTI_COMUNI.map(s=><option key={s} value={s} />)}</datalist>
     {err&&<div className="err" style={{marginTop:8}}>{err}</div>}
@@ -608,7 +608,7 @@ function diffFields(fields,a,b){
     const av=a[f.n],bv=b[f.n];
     const an=Array.isArray(av)?av.join(", "):(av==null?"":String(av));
     const bn=Array.isArray(bv)?bv.join(", "):(bv==null?"":String(bv));
-    if(an!==bn)out.push({label:f.l,a:an||"\u2014",b:bn||"\u2014"});
+    if(an!==bn)out.push({label:f.l,a:an||"—",b:bn||"—"});
   });
   return out;
 }
@@ -730,9 +730,9 @@ function PatientSheet({p,token,onClose,onDeleted,onAnswersUpdated}){
         <div className="head"><div className="sp">
           <span className={"badge "+p.percorso}>{PERCORSI[p.percorso]}</span>
           <h1 style={{margin:".25em 0 0"}}>{p.cognome} {p.nome}</h1>
-          <div className="kv"><span><b>{ageFrom(p.data_nascita)??"\u2013"}</b> anni</span><span>Nato/a il <b>{p.data_nascita?dfmt(p.data_nascita):"\u2013"}</b></span>{p.telefono&&<span>{p.telefono}</span>}{p.email&&<span>{p.email}</span>}<span>Compilato il <b>{dfmt(p.created_at)}</b></span></div>
+          <div className="kv"><span><b>{ageFrom(p.data_nascita)??"–"}</b> anni</span><span>Nato/a il <b>{p.data_nascita?dfmt(p.data_nascita):"–"}</b></span>{p.telefono&&<span>{p.telefono}</span>}{p.email&&<span>{p.email}</span>}<span>Compilato il <b>{dfmt(p.created_at)}</b></span></div>
           {delErr&&<div className="err" style={{marginTop:8}}>{delErr}</div>}
-        </div><button className="btn danger" style={{marginRight:8}} disabled={delBusy} onClick={handleDelete}>{delBusy?"Eliminazione\u2026":"\uD83D\uDDD1 Elimina"}</button><button className="close" onClick={onClose}>{"\u00d7"}</button></div>
+        </div><button className="btn danger" style={{marginRight:8}} disabled={delBusy} onClick={handleDelete}>{delBusy?"Eliminazione…":"🗑 Elimina"}</button><button className="close" onClick={onClose}>{"×"}</button></div>
 
         <div className="card">
           <div className="tabs">{TABS.map(([k,lab])=>(
@@ -741,7 +741,7 @@ function PatientSheet({p,token,onClose,onDeleted,onAnswersUpdated}){
           {tab==="report"&&<div>
             <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
               <h2 style={{flex:1}}>Quadro interdisciplinare</h2>
-              <button className="btn ghost" onClick={()=>setEditingAnamnesi(x=>!x)}>{editingAnamnesi?"\u2715 Chiudi modifica":"\u270E Modifica anamnesi"}</button>
+              <button className="btn ghost" onClick={()=>setEditingAnamnesi(x=>!x)}>{editingAnamnesi?"✕ Chiudi modifica":"✎ Modifica anamnesi"}</button>
             </div>
             {editingAnamnesi?<div>
               <p className="note" style={{marginTop:4}}>Stai modificando le risposte dell'anamnesi compilata dal paziente. Il quadro e il report si aggiornano di conseguenza.</p>
@@ -752,19 +752,19 @@ function PatientSheet({p,token,onClose,onDeleted,onAnswersUpdated}){
               <div className="savebar"><button className="btn primary" onClick={saveAnamnesi}>Salva anamnesi</button>{savedAns&&<span className="savemsg">{savedAns}</span>}</div>
             </div>:<div>
             <p className="note" style={{marginTop:4,marginBottom:0}}>Integra anamnesi del paziente + esame clinico + sEMG. Si aggiorna man mano che compili le schede.</p>
-            {answers.diagnosi_specialisti&&answers.diagnosi_specialisti.length>0&&<div className="repsec"><h3>Diagnosi specialistiche pregresse</h3><ul>{answers.diagnosi_specialisti.map((d,i)=><li key={i}><b>{d.specialista||"Specialista"}</b>{d.files&&d.files.length>0?" \u2014 "+d.files.length+" documento/i":" \u2014 nessun documento allegato"}</li>)}</ul></div>}
+            {answers.diagnosi_specialisti&&answers.diagnosi_specialisti.length>0&&<div className="repsec"><h3>Diagnosi specialistiche pregresse</h3><ul>{answers.diagnosi_specialisti.map((d,i)=><li key={i}><b>{d.specialista||"Specialista"}</b>{d.files&&d.files.length>0?" — "+d.files.length+" documento/i":" — nessun documento allegato"}</li>)}</ul></div>}
             <div className="sem">{grid.map(d=>(<div className="dom" key={d.dominio}><b><span className={"dot "+d.livello}></span>{d.dominio}</b><small>{d.nota}</small>{d.fonti&&d.fonti.length>0&&<div style={{marginTop:6}}><Srcs list={d.fonti} /></div>}</div>))}</div>
-            <div className="repsec"><h3>1 \u00b7 Informazioni odontoiatriche rilevanti</h3><ul>{rep.odo.map((x,i)=><li key={i}>{x}</li>)}</ul></div>
-            <div className="repsec"><h3>2 \u00b7 Informazioni muscolo-scheletriche e posturali</h3><ul>{rep.mss.map((x,i)=><li key={i}>{x}</li>)}</ul></div>
-            <div className="repsec"><h3>3 \u00b7 Possibili correlazioni cranio-cervico-mandibolari <span className="pill">ipotesi</span></h3><ul>{rep.correlazioni.map((x,i)=><li className="ipotesi" key={i}>{x}</li>)}</ul></div>
-            <div className="repsec"><h3>4 \u00b7 Bandiere rosse / da approfondire</h3>{rep.red.length?<div className="redbox"><ul>{rep.red.map((x,i)=><li key={i}><b>{x.etichetta}</b> <Src f={x.fonte} />{x.dettaglio?" \u2014 "+x.dettaglio:""}</li>)}</ul></div>:<ul><li>Nessuna bandiera rossa rilevata.</li></ul>}</div>
-            <div className="repsec"><h3>5 \u00b7 Priorita di valutazione in studio</h3>{rep.priorita.length?<ol>{rep.priorita.map((d,i)=><li key={i}><b>{d.dominio}</b> <span className={"dot "+d.livello}></span> \u2014 {d.nota} <Srcs list={d.fonti} /></li>)}</ol>:<ul><li>Protocollo SSDC standard.</li></ul>}</div>
+            <div className="repsec"><h3>1 · Informazioni odontoiatriche rilevanti</h3><ul>{rep.odo.map((x,i)=><li key={i}>{x}</li>)}</ul></div>
+            <div className="repsec"><h3>2 · Informazioni muscolo-scheletriche e posturali</h3><ul>{rep.mss.map((x,i)=><li key={i}>{x}</li>)}</ul></div>
+            <div className="repsec"><h3>3 · Possibili correlazioni cranio-cervico-mandibolari <span className="pill">ipotesi</span></h3><ul>{rep.correlazioni.map((x,i)=><li className="ipotesi" key={i}>{x}</li>)}</ul></div>
+            <div className="repsec"><h3>4 · Bandiere rosse / da approfondire</h3>{rep.red.length?<div className="redbox"><ul>{rep.red.map((x,i)=><li key={i}><b>{x.etichetta}</b> <Src f={x.fonte} />{x.dettaglio?" — "+x.dettaglio:""}</li>)}</ul></div>:<ul><li>Nessuna bandiera rossa rilevata.</li></ul>}</div>
+            <div className="repsec"><h3>5 · Priorita di valutazione in studio</h3>{rep.priorita.length?<ol>{rep.priorita.map((d,i)=><li key={i}><b>{d.dominio}</b> <span className={"dot "+d.livello}></span> — {d.nota} <Srcs list={d.fonti} /></li>)}</ol>:<ul><li>Protocollo SSDC standard.</li></ul>}</div>
             {exams.length>0&&<div className="repsec"><h3>Allegati del paziente</h3>{exams.map((e,i)=>{const nm=typeof e==="string"?e:e.name;return(<div className="exam" key={i}><span className="fi">{(nm.split(".").pop()||"").toUpperCase().slice(0,4)}</span><span>{nm}</span></div>);})}</div>}
-            {(()=>{const ns=collectNotes({odontoiatra:lastVisit.odontoiatra,fisioterapista:lastVisit.fisioterapista});return ns.length>0?(<div className="repsec"><h3>Note dei clinici (voce per voce)</h3><ul>{ns.map((x,i)=><li key={i}><b>{x.label}</b> <Src f={x.sez} /> \u2014 {x.nota}</li>)}</ul></div>):null;})()}
+            {(()=>{const ns=collectNotes({odontoiatra:lastVisit.odontoiatra,fisioterapista:lastVisit.fisioterapista});return ns.length>0?(<div className="repsec"><h3>Note dei clinici (voce per voce)</h3><ul>{ns.map((x,i)=><li key={i}><b>{x.label}</b> <Src f={x.sez} /> — {x.nota}</li>)}</ul></div>):null;})()}
             </div>}
             <div className="repsec"><h3>Nota / conclusione clinica libera</h3>
               <p className="note" style={{marginTop:0}}>Testo scritto da voi, separato da quanto calcolato automaticamente sopra.</p>
-              <div className="f wide"><textarea style={{minHeight:90}} value={v.nota_report||""} onChange={e=>setVal(s=>({...s,nota_report:e.target.value}))} placeholder="Es. conclusioni della visita, indicazioni concordate col paziente\u2026" /></div>
+              <div className="f wide"><textarea style={{minHeight:90}} value={v.nota_report||""} onChange={e=>setVal(s=>({...s,nota_report:e.target.value}))} placeholder="Es. conclusioni della visita, indicazioni concordate col paziente…" /></div>
               <div className="savebar"><button className="btn primary" onClick={save}>Salva nota</button>{saved&&<span className="savemsg">{saved}</span>}</div>
             </div>
           </div>}
@@ -773,7 +773,7 @@ function PatientSheet({p,token,onClose,onDeleted,onAnswersUpdated}){
             <h2>Altri specialisti da consultare</h2>
             <p className="note" style={{marginTop:4}}>Suggerimenti calcolati incrociando anamnesi, visita odontoiatrica e fisioterapica (ultima visita disponibile). Sono spunti di lavoro: la decisione finale resta al clinico.</p>
             {specialisti.length===0?<p className="note">Nessun segnale che al momento suggerisca il coinvolgimento di altri specialisti.</p>:
-              <div className="repsec"><ul>{specialisti.map((s,i)=><li key={i}><span className={"dot "+s.livello}></span> <b>{s.spec}</b> \u2014 {s.motivo}</li>)}</ul></div>}
+              <div className="repsec"><ul>{specialisti.map((s,i)=><li key={i}><span className={"dot "+s.livello}></span> <b>{s.spec}</b> — {s.motivo}</li>)}</ul></div>}
             <div className="savebar"><button className="btn ghost" onClick={()=>window.print()}>Stampa / PDF</button></div>
           </div>}
 
@@ -785,7 +785,7 @@ function PatientSheet({p,token,onClose,onDeleted,onAnswersUpdated}){
               <div className="grp" style={{borderTop:"none",paddingTop:0,marginTop:0}}>Diagnosi di altri specialisti rilevanti per questa visita</div>
               <DiagnosiSpecialistiTesto list={(activeVisit.odontoiatra||{}).diagnosi_specialisti} onChange={list=>setODO("diagnosi_specialisti",list)} />
             </div>}
-            {val===null?<p className="note">Caricamento\u2026</p>:<ClinForm fields={ODO} data={activeVisit.odontoiatra||{}} onSet={setODO} />}
+            {val===null?<p className="note">Caricamento…</p>:<ClinForm fields={ODO} data={activeVisit.odontoiatra||{}} onSet={setODO} />}
             <div className="savebar"><button className="btn primary" onClick={save}>Salva valutazione</button>{saved&&<span className="savemsg">{saved}</span>}</div>
           </div>}
 
@@ -813,7 +813,7 @@ function PatientSheet({p,token,onClose,onDeleted,onAnswersUpdated}){
               <div className="grp" style={{borderTop:"none",paddingTop:0,marginTop:0}}>Diagnosi di altri specialisti rilevanti per questa visita</div>
               <DiagnosiSpecialistiTesto list={(activeVisit.fisioterapista||{}).diagnosi_specialisti} onChange={list=>setFIS("diagnosi_specialisti",list)} />
             </div>}
-            {val===null?<p className="note">Caricamento\u2026</p>:<ClinForm fields={FISIO} data={activeVisit.fisioterapista||{}} onSet={setFIS} />}
+            {val===null?<p className="note">Caricamento…</p>:<ClinForm fields={FISIO} data={activeVisit.fisioterapista||{}} onSet={setFIS} />}
             <div className="savebar"><button className="btn primary" onClick={save}>Salva valutazione</button>{saved&&<span className="savemsg">{saved}</span>}</div>
           </div>}
 
@@ -847,8 +847,8 @@ function PatientSheet({p,token,onClose,onDeleted,onAnswersUpdated}){
                 const dF=diffFields(FISIO,A.fisioterapista,B.fisioterapista);
                 if(!dO.length&&!dF.length)return <p className="note">Nessuna differenza rilevata tra le due visite selezionate.</p>;
                 return (<>
-                  {dO.length>0&&<div className="repsec"><h3>Odontoiatra \u2014 differenze</h3><table className="diff"><thead><tr><th>Voce</th><th>Visita A</th><th>Visita B</th></tr></thead><tbody>{dO.map((r,i)=><tr key={i}><td>{r.label}</td><td className="old">{r.a}</td><td className="new">{r.b}</td></tr>)}</tbody></table></div>}
-                  {dF.length>0&&<div className="repsec"><h3>Fisioterapista \u2014 differenze</h3><table className="diff"><thead><tr><th>Voce</th><th>Visita A</th><th>Visita B</th></tr></thead><tbody>{dF.map((r,i)=><tr key={i}><td>{r.label}</td><td className="old">{r.a}</td><td className="new">{r.b}</td></tr>)}</tbody></table></div>}
+                  {dO.length>0&&<div className="repsec"><h3>Odontoiatra — differenze</h3><table className="diff"><thead><tr><th>Voce</th><th>Visita A</th><th>Visita B</th></tr></thead><tbody>{dO.map((r,i)=><tr key={i}><td>{r.label}</td><td className="old">{r.a}</td><td className="new">{r.b}</td></tr>)}</tbody></table></div>}
+                  {dF.length>0&&<div className="repsec"><h3>Fisioterapista — differenze</h3><table className="diff"><thead><tr><th>Voce</th><th>Visita A</th><th>Visita B</th></tr></thead><tbody>{dF.map((r,i)=><tr key={i}><td>{r.label}</td><td className="old">{r.a}</td><td className="new">{r.b}</td></tr>)}</tbody></table></div>}
                 </>);
               })()}
             </>}
@@ -859,7 +859,7 @@ function PatientSheet({p,token,onClose,onDeleted,onAnswersUpdated}){
             <p className="note" style={{marginTop:0}}>Inserire i valori pre e post trattamento per questa visita. VN = valori normali di riferimento.</p>
             <VisitBar />
             {val!==null&&<div className="visitmeta"><label>Data di questa visita <input type="date" value={activeVisit.data||""} onChange={e=>setVisitDate(e.target.value)} /></label>{visite.length>1&&<button className="notebtn" onClick={()=>deleteVisit(activeVisitId)}>Elimina questa visita</button>}</div>}
-            {val===null?<p className="note">Caricamento\u2026</p>:<SemgMatrix data={activeVisit.semg||{}} onSet={setSE} />}
+            {val===null?<p className="note">Caricamento…</p>:<SemgMatrix data={activeVisit.semg||{}} onSet={setSE} />}
             <div className="savebar"><button className="btn primary" onClick={save}>Salva valutazione</button><button className="btn ghost" onClick={()=>window.print()}>Stampa / PDF</button>{saved&&<span className="savemsg">{saved}</span>}</div>
             {visite.length>1&&<div className="repsec">
               <h3>Andamento sEMG su tutte le visite</h3>
@@ -873,7 +873,7 @@ function PatientSheet({p,token,onClose,onDeleted,onAnswersUpdated}){
                 <tbody>
                   {SEMG.map(s=>(<tr key={s.n}><td>{s.l}</td><td className="vn">{s.vn}</td>
                     {visite.map(vi=>{const pre=vi.semg&&vi.semg.pre&&vi.semg.pre[s.n];const post=vi.semg&&vi.semg.post&&vi.semg.post[s.n];
-                      return <React.Fragment key={vi.id}><td>{pre!=null&&pre!==""?pre:"\u2014"}</td><td>{post!=null&&post!==""?post:"\u2014"}</td></React.Fragment>;})}
+                      return <React.Fragment key={vi.id}><td>{pre!=null&&pre!==""?pre:"—"}</td><td>{post!=null&&post!==""?post:"—"}</td></React.Fragment>;})}
                   </tr>))}
                 </tbody>
               </table>
@@ -884,7 +884,7 @@ function PatientSheet({p,token,onClose,onDeleted,onAnswersUpdated}){
           {tab==="ai"&&<div>
             <h2>Inquadramento assistito (IA)</h2>
             <div className="warnbox"><b>Supporto alla decisione clinica, non una diagnosi.</b> Le ipotesi vanno confermate dal clinico con l'esame e i test SSDC. In presenza di bandiere rosse, valutare l'invio a una valutazione medica.</div>
-            {!ai&&<button className="btn primary" onClick={genAI} disabled={aiBusy}>{aiBusy?"Elaborazione in corso\u2026":"Genera inquadramento del caso"}</button>}
+            {!ai&&<button className="btn primary" onClick={genAI} disabled={aiBusy}>{aiBusy?"Elaborazione in corso…":"Genera inquadramento del caso"}</button>}
             {aiErr&&<div className="err">{aiErr}<div style={{fontWeight:400,marginTop:6}}>Nota: la sintesi IA funziona nell'anteprima Claude. Per il sito pubblicato serve un piccolo proxy con la tua chiave Anthropic (vedi guida).</div></div>}
             {ai&&<div>
               <div className="repsec" style={{borderTop:"none",paddingTop:0,marginTop:4}}><h3>Sintesi del caso</h3><p style={{color:"var(--ink2)",margin:0}}>{ai.sintesi}</p></div>
@@ -914,22 +914,22 @@ function Dashboard({patients,demo,token,onLogout,onRefresh,onConfig,onPatientDel
   const list=useMemo(()=>enriched.filter(p=>{if(perc!=="tutti"&&p.percorso!==perc)return false;if(onlyRed&&!p._red)return false;if(q){const s=((p.nome||"")+" "+(p.cognome||"")).toLowerCase();if(!s.includes(q.toLowerCase()))return false;}return true;}),[enriched,q,perc,onlyRed]);
   const stats={tot:patients.length,red:enriched.filter(p=>p._red).length,dcm:patients.filter(p=>p.percorso==="dcm").length,junior:patients.filter(p=>p.percorso==="junior").length};
   return (<div className="wrap">
-    <div className="topbar"><img className="logo" src={LOGO_SRC} alt="Dr. Sandro Iorio"/><div className="ttl">Gestionale clinico<small>Pazienti schedati \u00b7 SSDC</small></div><div className="sp"></div>
-      {demo&&<span className="demo-pill">Demo</span>}{demo&&onConfig&&<button className="chip" onClick={onConfig}>{"\u2699"} Configura</button>}{demo&&onRefresh&&<button className="chip" onClick={onRefresh}>{"\u21bb"} Aggiorna</button>}
+    <div className="topbar"><img className="logo" src={LOGO_SRC} alt="Dr. Sandro Iorio"/><div className="ttl">Gestionale clinico<small>Pazienti schedati · SSDC</small></div><div className="sp"></div>
+      {demo&&<span className="demo-pill">Demo</span>}{demo&&onConfig&&<button className="chip" onClick={onConfig}>{"⚙"} Configura</button>}{demo&&onRefresh&&<button className="chip" onClick={onRefresh}>{"↻"} Aggiorna</button>}
       <button className="chip" onClick={onLogout}>{demo?"Esci":"Logout"}</button></div>
     <div className="stats">
       <div className="stat"><div className="n">{stats.tot}</div><div className="l">Pazienti totali</div></div>
       <div className="stat red"><div className="n">{stats.red}</div><div className="l">Con bandiere rosse</div></div>
       <div className="stat"><div className="n">{stats.dcm}</div><div className="l">Percorso DCM</div></div>
       <div className="stat"><div className="n">{stats.junior}</div><div className="l">Percorso Junior</div></div></div>
-    <div className="toolbar"><div className="search"><span className="mag">{"\uD83D\uDD0D"}</span><input placeholder="Cerca per nome o cognome\u2026" value={q} onChange={e=>setQ(e.target.value)} /></div>
+    <div className="toolbar"><div className="search"><span className="mag">{"🔍"}</span><input placeholder="Cerca per nome o cognome…" value={q} onChange={e=>setQ(e.target.value)} /></div>
       {["tutti","junior","aligner","dcm","atleta"].map(k=>(<button key={k} className={"chip"+(perc===k?" on":"")} onClick={()=>setPerc(k)}>{k==="tutti"?"Tutti":PERCORSI[k]}</button>))}
-      <button className={"chip"+(onlyRed?" on":"")} onClick={()=>setOnlyRed(v=>!v)}>{"\u26A0\uFE0F"} Solo bandiere rosse</button></div>
+      <button className={"chip"+(onlyRed?" on":"")} onClick={()=>setOnlyRed(v=>!v)}>{"⚠️"} Solo bandiere rosse</button></div>
     <div className="plist">{list.length===0&&<div className="empty">Nessun paziente trovato.</div>}
       {list.map(p=>(<div className="prow" key={p.id} onClick={()=>setSel(p)}><div>
         <div className="nm">{p.cognome} {p.nome}</div>
-        <div className="sub"><span className={"badge "+p.percorso}>{PERCORSI[p.percorso]}</span><span>{ageFrom(p.data_nascita)??"\u2013"} anni</span><span>\u00b7</span><span>{dfmt(p.created_at)}</span></div></div>
-        <div className="right">{p._red>0&&<span className="redtag">{"\u26A0\uFE0F"} {p._red}</span>}<span className="dots">{p._red>0&&<span className="dot rosso"></span>}{p._yel>0&&<span className="dot giallo"></span>}{p._red===0&&p._yel===0&&<span className="dot verde"></span>}</span><span className="chev">{"\u203A"}</span></div></div>))}</div>
+        <div className="sub"><span className={"badge "+p.percorso}>{PERCORSI[p.percorso]}</span><span>{ageFrom(p.data_nascita)??"–"} anni</span><span>·</span><span>{dfmt(p.created_at)}</span></div></div>
+        <div className="right">{p._red>0&&<span className="redtag">{"⚠️"} {p._red}</span>}<span className="dots">{p._red>0&&<span className="dot rosso"></span>}{p._yel>0&&<span className="dot giallo"></span>}{p._red===0&&p._yel===0&&<span className="dot verde"></span>}</span><span className="chev">{"›"}</span></div></div>))}</div>
     {sel&&<PatientSheet p={sel} token={token} onClose={()=>setSel(null)} onDeleted={onPatientDeleted} onAnswersUpdated={onAnswersUpdated} />}
   </div>);
 }
@@ -973,7 +973,7 @@ function App(){
       <input type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
       <input type="password" placeholder="Password" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doLogin()} />
       {err&&<div className="err">{err}</div>}
-      <button className="btn primary" disabled={busy} onClick={doLogin}>{busy?"Accesso\u2026":"Entra"}</button>
+      <button className="btn primary" disabled={busy} onClick={doLogin}>{busy?"Accesso…":"Entra"}</button>
       <button className="btn ghost" style={{width:"100%",marginTop:8}} onClick={()=>setSetup(true)}>Configura</button>
       <p className="note">L'utente deve esistere in <b>Auth</b> e avere una riga nella tabella <b>staff</b>.</p></div></div>);
   return <Dashboard patients={patients} demo={false} token={token} onLogout={()=>{setToken(null);setPatients([]);}} onPatientDeleted={handlePatientDeleted} onAnswersUpdated={handleAnswersUpdated} />;
