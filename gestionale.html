@@ -82,6 +82,14 @@
   table.diff td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
   table.diff td.old{color:#a23823;text-decoration:line-through;opacity:.75}
   table.diff td.new{color:#1a7a4c;font-weight:700}
+  .trafficbig{display:flex;align-items:center;gap:18px;padding:20px 22px;border-radius:16px;margin:14px 0;border:1.5px solid var(--line2)}
+  .trafficbig .tbdot{width:46px;height:46px;border-radius:50%;flex:none;box-shadow:inset 0 2px 4px rgba(0,0,0,.15)}
+  .trafficbig.verde{background:#eaf6ee;border-color:#bfe3cd}.trafficbig.verde .tbdot{background:var(--verde)}
+  .trafficbig.giallo{background:#fbf3e0;border-color:#e6cf95}.trafficbig.giallo .tbdot{background:var(--giallo)}
+  .trafficbig.rosso{background:#fbece8;border-color:#e3a99c}.trafficbig.rosso .tbdot{background:var(--rosso)}
+  .trafficbig .tbtext{display:flex;flex-direction:column;gap:4px}
+  .trafficbig .tbtext b{font-family:"Fraunces",serif;font-weight:600;font-size:1.15rem;color:var(--ink)}
+  .trafficbig .tbtext span{color:var(--ink2);font-size:.94rem}
   /* form clinico */
   .form{display:grid;grid-template-columns:1fr;gap:16px;margin-top:4px}@media(min-width:640px){.form{grid-template-columns:1fr 1fr}}
   .f label{font-weight:600;font-size:.95rem;display:block;margin-bottom:6px}
@@ -165,6 +173,77 @@ function correlazioni(a){const c=[];
   if(!c.length)c.push("Nessuna correlazione evidente dall'anamnesi. Confermare con i test in studio.");return c;}
 const DOMINI=["ATM","Cervicale","Occlusione","Bruxismo","Sonno","Respirazione","Postura","Trauma"];const rank={rosso:3,giallo:2,verde:1};
 function interdisciplinare(flags){return DOMINI.map(d=>{const ff=flags.filter(f=>f.dominio===d);let lvl="verde",note="Nessun segnale dall'anamnesi.",fonti=[];if(ff.length){ff.sort((a,b)=>rank[b.livello]-rank[a.livello]);lvl=ff[0].livello;note=ff.map(x=>x.etichetta).join(" \u00b7 ");fonti=[...new Set(ff.map(x=>x.fonte).filter(Boolean))];}return{dominio:d,livello:lvl,nota:note,fonti};});}
+
+/* ===== Triage fisioterapico per il paziente =====
+   Semaforo semplice, pensato per essere spiegato al paziente durante la visita odontoiatrica:
+   usa solo i segnali di anamnesi + esame odontoiatrico (non richiede che il fisio abbia gia visto il paziente). */
+const FISIO_TRIAGE_DOMINI=["ATM","Cervicale","Postura"];
+const FISIO_TRIAGE_SPIEGA={
+  "Disfunzione ATM da approfondire":"Hai riferito dolore o rumori alla mascella che meritano un controllo piu approfondito.",
+  "Cefalea/cervicalgia riferita":"Hai riferito mal di testa o dolore al collo, spesso collegati alla mandibola.",
+  "Possibile compenso posturale":"Il modo in cui mastichi potrebbe influenzare la postura del collo e delle spalle.",
+  "Disfunzione ATM clinica":"Durante la visita abbiamo notato segni di tensione o blocco nell'articolazione della mandibola.",
+  "Click articolare rilevato":"Durante l'apertura della bocca e presente un rumore articolare (click).",
+  "Apertura limitata (<40 mm)":"L'apertura della bocca risulta piu ridotta del normale."
+};
+function triageFisio(anamnesiFlags,visitClinFlags){
+  const rilevanti=[...anamnesiFlags,...visitClinFlags].filter(f=>FISIO_TRIAGE_DOMINI.includes(f.dominio)&&(f.fonte==="Anamnesi"||f.fonte==="Odontoiatra"));
+  let livello="verde";
+  if(rilevanti.some(f=>f.livello==="rosso"))livello="rosso";
+  else if(rilevanti.some(f=>f.livello==="giallo"))livello="giallo";
+  return {livello,motivi:rilevanti};
+}
+
+/* ===== Triage odontoiatrico per il paziente (caso speculare) =====
+   Usato dal fisioterapista durante la sua visita per capire se serve un controllo odontoiatrico. */
+const ODONTO_TRIAGE_DOMINI=["Occlusione","Bruxismo","Respirazione","Sonno"];
+const ODONTO_TRIAGE_SPIEGA={
+  "Respiro orale prevalente":"Hai riferito di respirare prevalentemente con la bocca durante il giorno.",
+  "Sospetta apnea notturna (OSAS)":"Sono emersi segnali di un sonno disturbato, con possibili pause respiratorie notturne.",
+  "Bruxismo / serramento riferito":"Hai riferito di digrignare o serrare i denti, soprattutto di notte.",
+  "Masticazione monolaterale":"Tendi a masticare prevalentemente da un lato.",
+  "Sospetta spinta linguale":"E' emerso un possibile scorretto posizionamento della lingua durante la deglutizione.",
+  "Respiro clavicolare alto":"Durante la valutazione e emerso un respiro che coinvolge soprattutto la parte alta del torace.",
+  "Glatzel: flusso scarso":"Il test del flusso nasale ha mostrato una respirazione nasale ridotta.",
+  "Spinta linguale (chewing test)":"Durante il test della masticazione e emersa una spinta della lingua contro i denti.",
+  "Cicli masticatori asimmetrici":"La masticazione risulta poco equilibrata tra i due lati."
+};
+const TRIAGE_SPIEGA_PREFISSI=[[/^Trigger point masticatori/,"Durante la valutazione sono emersi punti dolorosi nei muscoli della masticazione, spesso legati a un sovraccarico occlusale."]];
+function explainFlag(etichetta,dict){
+  if(dict[etichetta])return dict[etichetta];
+  for(const [re,txt] of TRIAGE_SPIEGA_PREFISSI){if(re.test(etichetta))return txt;}
+  return etichetta;
+}
+function triageOdonto(anamnesiFlags,visitClinFlags){
+  const rilevanti=[...anamnesiFlags,...visitClinFlags].filter(f=>ODONTO_TRIAGE_DOMINI.includes(f.dominio)&&(f.fonte==="Anamnesi"||f.fonte==="Fisioterapista"));
+  let livello="verde";
+  if(rilevanti.some(f=>f.livello==="rosso"))livello="rosso";
+  else if(rilevanti.some(f=>f.livello==="giallo"))livello="giallo";
+  return {livello,motivi:rilevanti};
+}
+
+/* ===== Altri specialisti da consultare =====
+   Incrocia anamnesi + esame odontoiatrico + esame fisioterapico dell'ultima visita
+   per suggerire figure esterne al percorso SSDC (non sostituisce il giudizio clinico). */
+function suggerisciSpecialisti(allFlags,answers,lastVisit){
+  const out=[];const add=(spec,livello,motivo)=>out.push({spec,livello,motivo});
+  const has=(etichetta)=>allFlags.some(f=>f.etichetta===etichetta);
+  const hasPrefix=(re)=>allFlags.some(f=>re.test(f.etichetta));
+  if(has("Sospetta apnea notturna (OSAS)"))add("Otorinolaringoiatra / Centro del sonno","rosso","Sospette apnee notturne riferite in anamnesi: utile un approfondimento specialistico del sonno.");
+  if(answers.salute_orl&&answers.salute_orl.some(x=>x!=="nessuna"))add("Otorinolaringoiatra","giallo","Storia di otiti, tonsilliti, adenoidi o sinusiti riferita in anamnesi.");
+  if(has("Trauma con perdita di coscienza"))add("Neurologo","rosso","Trauma cranico con perdita di coscienza riferito: valutazione prioritaria.");
+  if(has("Cluster vertigini + cefalea"))add("Neurologo / Otorinolaringoiatra","rosso","Vertigini associate a cefalea: da approfondire per la componente vestibolare/neurologica.");
+  if(has("NPC > 10 cm"))add("Optometrista / Ortottista","giallo","Insufficienza di convergenza rilevata al test NPC: utile una valutazione visiva.");
+  if(hasPrefix(/^Anchiloglossia/))add("Chirurgo orale / Logopedista","giallo","Frenulo linguale corto (anchiloglossia): valutare eventuale frenulectomia e/o rieducazione logopedica.");
+  if(answers.deglutizione_atipica==="si")add("Logopedista","giallo","Sospetta deglutizione atipica riferita: una rieducazione mio-funzionale puo essere utile.");
+  const of=lastVisit.odontoiatra||{};
+  if(Array.isArray(of.lingua_forma)&&of.lingua_forma.some(x=>x==="Tonsilla ipertrofica"||x==="Patinata"))add("Otorinolaringoiatra / Gastroenterologo","giallo","Aspetto della lingua compatibile con reflusso o ipertrofia tonsillare, da approfondire.");
+  const ff=lastVisit.fisioterapista||{};
+  if(Array.isArray(ff.viscerali)&&ff.viscerali.length>0)add("Osteopata viscerale / Gastroenterologo","giallo","Segni di tensione viscerale rilevati durante la valutazione fisioterapica.");
+  if((answers.sintomi&&answers.sintomi.includes("dolori_schiena"))||(answers.dolore_sede&&/schiena/i.test(answers.dolore_sede)))add("Ortopedico / Osteopata","giallo","Dolore riferito alla schiena: da inquadrare anche al di fuori dell'ambito stomatognatico.");
+  const map={};out.forEach(o=>{if(!map[o.spec]||rank[o.livello]>rank[map[o.spec].livello])map[o.spec]=o;});
+  return Object.values(map).sort((a,b)=>rank[b.livello]-rank[a.livello]);
+}
 const L={respiro:{naso:"nasale",bocca:"orale",misto:"misto"},mast:{entrambi:"bilaterale equilibrata",dx:"prevalente a destra",sx:"prevalente a sinistra"},durata:{meno_1_mese:"<1 mese","1_6_mesi":"1-6 mesi",oltre_6_mesi:">6 mesi",anni:"anni"}};
 function reportClinico(a,flags){const odo=[],mss=[];
   if(a.respiro_giorno)odo.push("Respirazione diurna "+(L.respiro[a.respiro_giorno]||a.respiro_giorno)+(a.naso_chiuso==="si"?" (naso spesso chiuso)":"")+".");
@@ -239,6 +318,38 @@ function Srcs({list}){if(!list||!list.length)return null;return <span className=
 function dfmt(s){try{return new Date(s).toLocaleDateString("it-IT",{day:"2-digit",month:"short",year:"numeric"});}catch(e){return s;}}
 
 /* ===== PROTOCOLLI in studio ===== */
+const ANAMNESI=[
+ {n:"__g1",t:"grp",l:"Sintomi"},
+ {n:"sintomi",l:"Sintomi riferiti",t:"multi",o:[["cefalea_cervicalgia","Cefalea/cervicalgia"],["dolori_schiena","Dolori alla schiena"],["vertigini","Vertigini"],["dolore_atm","Dolore apertura/chiusura bocca"],["limitazione_apertura","Limitazione apertura orale"],["rumori_articolari","Rumori articolari"],["affaticamento_masticatorio","Affaticamento masticatorio"],["nessuno","Nessun sintomo"]]},
+ {n:"nrs",l:"Intensita del dolore (NRS 0\u201310)",t:"scale10"},
+ {n:"dolore_durata",l:"Da quanto tempo",t:"radio",o:[["meno_1_mese","<1 mese"],["1_6_mesi","1\u20136 mesi"],["oltre_6_mesi",">6 mesi"],["anni","Anni"]]},
+ {n:"dolore_sede",l:"Sede del dolore",t:"text",h:"Separa piu zone con una virgola, es. tempie, collo, mandibola"},
+ {n:"__g2",t:"grp",l:"Respirazione e sonno"},
+ {n:"respiro_giorno",l:"Respirazione prevalente di giorno",t:"radio",o:[["naso","Nasale"],["bocca","Orale"],["misto","Mista"]]},
+ {n:"naso_chiuso",l:"Naso spesso chiuso",t:"radio",o:[["si","Si"],["no","No"]]},
+ {n:"risveglio",l:"Al risveglio ti senti riposato",t:"radio",o:[["sempre","Sempre"],["spesso","Spesso"],["raramente","Raramente"],["mai","Mai"]]},
+ {n:"sonno_segni",l:"Segni notturni",t:"multi",o:[["russamento","Russamento"],["apnee","Sospette apnee"],["bocca_aperta","Bocca aperta"],["nessuna","Nessuna"]]},
+ {n:"__g3",t:"grp",l:"Bruxismo e masticazione"},
+ {n:"bruxismo",l:"Digrigni o serri i denti",t:"radio",o:[["si","Si"],["no","No"],["non_so","Non so"]]},
+ {n:"bruxismo_mattino",l:"Con sintomi al risveglio",t:"radio",o:[["si","Si"],["no","No"]]},
+ {n:"masticazione",l:"Lato di masticazione prevalente",t:"radio",o:[["entrambi","Entrambi (equilibrata)"],["dx","Destra"],["sx","Sinistra"]]},
+ {n:"deglutizione_atipica",l:"Sospetta deglutizione atipica",t:"radio",o:[["si","Si"],["no","No"]]},
+ {n:"__g4",t:"grp",l:"Storia clinica"},
+ {n:"salute_orl",l:"Storia ORL",t:"multi",o:[["otiti","Otiti"],["tonsilliti","Tonsilliti"],["adenoidi","Adenoidi ingrossate"],["sinusiti","Sinusiti"],["nessuna","Nessuna"]]},
+ {n:"trauma",l:"Trauma cranio-cervicale pregresso",t:"radio",o:[["si","Si"],["no","No"]]},
+ {n:"trauma_dettaglio",l:"Dettaglio trauma",t:"textarea",wide:true},
+ {n:"trauma_incoscienza",l:"Con perdita di coscienza",t:"radio",o:[["si","Si"],["no","No"]]},
+ {n:"__g5",t:"grp",l:"Abitudini e prima infanzia"},
+ {n:"abitudini",l:"Abitudini viziate",t:"multi",o:[["suzione","Succhiamento dito/ciuccio"],["onicofagia","Mangiarsi le unghie"],["mordere_oggetti","Mordere oggetti"],["ciuccio","Uso ciuccio oltre i 2 anni"],["nessuna","Nessuna"]]},
+ {n:"parto",l:"Tipo di parto",t:"radio",o:[["naturale","Naturale"],["cesareo","Cesareo"]]},
+ {n:"allattamento",l:"Tipo di allattamento",t:"radio",o:[["naturale","Naturale"],["artificiale","Artificiale"],["misto","Misto"]]},
+ {n:"__g6",t:"grp",l:"Sport e obiettivi"},
+ {n:"attivita_sportiva",l:"Attivita sportiva",t:"radio",o:[["nessuna","Nessuna"],["agonistica","Agonistica"],["non_agonistica","Non agonistica"]]},
+ {n:"sport_quale",l:"Quale sport",t:"text"},
+ {n:"paradenti",l:"Uso di paradenti",t:"radio",o:[["nessuno","Nessuno"],["commercio","Del commercio"],["individuale","Individuale (dal dentista)"]]},
+ {n:"obiettivi",l:"Obiettivi del paziente",t:"multi",o:[["dolore","Ridurre il dolore"],["postura","Migliorare la postura"],["funzione","Migliorare la funzione"],["estetica","Estetica"],["performance","Performance sportiva"]]},
+];
+
 const ODO=[
  {n:"__g1",t:"grp",l:"Documentazione"},
  {n:"archivio_foto",l:"Foto intra/extra orali complete",t:"radio",o:["Si","No"]},
@@ -335,15 +446,18 @@ const DEMO=[
    answers:{percorso:"dcm",sintomi:["dolore_atm","rumori_articolari","limitazione_apertura","affaticamento_masticatorio"],nrs:6,dolore_durata:"1_6_mesi",dolore_sede:["mandibola","tempie"],respiro_giorno:"naso",risveglio:"spesso",sonno_segni:["nessuna"],bruxismo:"si",bruxismo_mattino:"no",masticazione:"sx",deglutizione_atipica:"no",obiettivi:["dolore","funzione"]}},
 ];
 function loadLocal(){try{return JSON.parse(localStorage.getItem("ssdc_intakes")||"[]");}catch(e){return [];}}
+function loadAnswersOverrides(){try{return JSON.parse(localStorage.getItem("ssdc_answers_overrides")||"{}");}catch(e){return {};}}
+function saveAnswersLocal(id,answers){try{const m=loadAnswersOverrides();m[id]=answers;localStorage.setItem("ssdc_answers_overrides",JSON.stringify(m));return true;}catch(e){return false;}}
 function loadDeletedLocal(){try{return JSON.parse(localStorage.getItem("ssdc_deleted")||"[]");}catch(e){return [];}}
 function addDeletedLocal(id){try{const d=loadDeletedLocal();if(!d.includes(id)){d.push(id);localStorage.setItem("ssdc_deleted",JSON.stringify(d));}}catch(e){}}
-function demoData(){const loc=loadLocal();const del=loadDeletedLocal();return [...loc,...DEMO].filter(p=>!del.includes(p.id));}
+function demoData(){const loc=loadLocal();const del=loadDeletedLocal();const overrides=loadAnswersOverrides();return [...loc,...DEMO].filter(p=>!del.includes(p.id)).map(p=>overrides[p.id]?{...p,answers:overrides[p.id]}:p);}
 
 /* ===== valutazioni: persistenza ===== */
 function loadValLocal(id){try{const m=JSON.parse(localStorage.getItem("ssdc_valutazioni")||"{}");return m[id]||{};}catch(e){return {};}}
 function saveValLocal(id,dati){try{const m=JSON.parse(localStorage.getItem("ssdc_valutazioni")||"{}");m[id]=dati;localStorage.setItem("ssdc_valutazioni",JSON.stringify(m));return true;}catch(e){return false;}}
 async function loadValRemote(id,token){const r=await fetch(`${SUPABASE_URL}/rest/v1/valutazioni?submission_id=eq.${id}&select=dati`,{headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token}});if(!r.ok)return {};const j=await r.json();return (j[0]&&j[0].dati)||{};}
 async function saveValRemote(id,dati,token){const r=await fetch(`${SUPABASE_URL}/rest/v1/valutazioni?on_conflict=submission_id`,{method:"POST",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token,"Content-Type":"application/json",Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({submission_id:id,dati,updated_at:new Date().toISOString()})});return r.ok;}
+async function saveAnswersRemote(id,answers,token){const r=await fetch(`${SUPABASE_URL}/rest/v1/submissions?id=eq.${id}`,{method:"PATCH",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({answers})});return r.ok;}
 async function deletePatientRemote(id,token){await fetch(`${SUPABASE_URL}/rest/v1/valutazioni?submission_id=eq.${id}`,{method:"DELETE",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token}});const r=await fetch(`${SUPABASE_URL}/rest/v1/submissions?id=eq.${id}`,{method:"DELETE",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token}});return r.ok;}
 
 /* ===== API lettura pazienti ===== */
@@ -363,8 +477,8 @@ function ClinField({f,val,set}){
     {f.t==="text"&&<input value={v||""} onChange={e=>set(f.n,e.target.value)} />}
     {f.t==="number"&&<div className="num"><input type="number" value={v||""} onChange={e=>set(f.n,e.target.value)} style={{maxWidth:130}} />{f.u&&<span className="u">{f.u}</span>}</div>}
     {f.t==="textarea"&&<textarea value={v||""} onChange={e=>set(f.n,e.target.value)} />}
-    {f.t==="radio"&&<div className="optrow">{f.o.map(o=><button key={o} className={"optbtn"+(v===o?" on":"")} onClick={()=>set(f.n,v===o?"":o)}>{o}</button>)}</div>}
-    {f.t==="multi"&&<div className="optrow">{f.o.map(o=>{const arr=Array.isArray(v)?v:[];const on=arr.includes(o);return <button key={o} className={"optbtn"+(on?" on":"")} onClick={()=>set(f.n,on?arr.filter(x=>x!==o):[...arr,o])}>{o}</button>;})}</div>}
+    {f.t==="radio"&&<div className="optrow">{f.o.map(o=>{const val=Array.isArray(o)?o[0]:o;const lab=Array.isArray(o)?o[1]:o;return <button key={val} className={"optbtn"+(v===val?" on":"")} onClick={()=>set(f.n,v===val?"":val)}>{lab}</button>;})}</div>}
+    {f.t==="multi"&&<div className="optrow">{f.o.map(o=>{const val=Array.isArray(o)?o[0]:o;const lab=Array.isArray(o)?o[1]:o;const arr=Array.isArray(v)?v:[];const on=arr.includes(val);return <button key={val} className={"optbtn"+(on?" on":"")} onClick={()=>set(f.n,on?arr.filter(x=>x!==val):[...arr,val])}>{lab}</button>;})}</div>}
     {f.t==="scale10"&&<div className="optrow">{[...Array(11)].map((_,i)=><button key={i} className={"optbtn"+(String(v)===String(i)?" on":"")} onClick={()=>set(f.n,i)}>{i}</button>)}</div>}
     {f.h&&<div className="h">{f.h}</div>}
     {f.t!=="textarea"&&<div className="fnote">
@@ -419,7 +533,7 @@ async function callAI(payload){
 }
 
 /* ===== scheda paziente (anamnesi + protocolli) ===== */
-function PatientSheet({p,token,onClose,onDeleted}){
+function PatientSheet({p,token,onClose,onDeleted,onAnswersUpdated}){
   const [tab,setTab]=useState("report");
   const [val,setVal]=useState(null);
   const [saved,setSaved]=useState("");
@@ -456,15 +570,29 @@ function PatientSheet({p,token,onClose,onDeleted}){
       }
     }
     if(go){setVal(d);setActiveVisitId(d.visite[d.visite.length-1].id);if(d.ai)setAi(d.ai);}})();return()=>{go=false;};},[p.id]);
-  const flags=useMemo(()=>computeFlags(p.answers),[p.answers]);
+  const [answers,setAnswers]=useState(p.answers||{});
+  const [editingAnamnesi,setEditingAnamnesi]=useState(false);
+  const [savedAns,setSavedAns]=useState("");
+  const setAns=(k,x)=>setAnswers(s=>({...s,[k]:x}));
+  async function saveAnamnesi(){
+    let ok;
+    if(SUPABASE_URL&&token){ok=await saveAnswersRemote(p.id,answers,token);}else{ok=saveAnswersLocal(p.id,answers);}
+    setSavedAns(ok?"Anamnesi salvata":"Errore di salvataggio");setTimeout(()=>setSavedAns(""),2600);
+    if(ok&&onAnswersUpdated)onAnswersUpdated(p.id,answers);
+  }
+  const flags=useMemo(()=>computeFlags(answers),[answers]);
   const v=val||{};
   const visite=v.visite||[];
   const activeVisit=visite.find(x=>x.id===activeVisitId)||visite[visite.length-1]||{odontoiatra:{},fisioterapista:{}};
   const lastVisit=visite[visite.length-1]||{};
   const clinFlags=useMemo(()=>computeClinicalFlags({odontoiatra:lastVisit.odontoiatra,fisioterapista:lastVisit.fisioterapista,semg:lastVisit.semg}),[visite]);
   const allFlags=[...flags,...clinFlags];
-  const grid=interdisciplinare(allFlags);const rep=reportClinico(p.answers,allFlags);
-  const exams=p.answers.esami_paths||p.answers.esami_files||[];
+  const specialisti=useMemo(()=>suggerisciSpecialisti(allFlags,answers,lastVisit),[allFlags,answers,lastVisit]);
+  const grid=interdisciplinare(allFlags);const rep=reportClinico(answers,allFlags);
+  const activeClinFlags=useMemo(()=>computeClinicalFlags({odontoiatra:activeVisit.odontoiatra,fisioterapista:activeVisit.fisioterapista,semg:activeVisit.semg}),[activeVisit]);
+  const triage=useMemo(()=>triageFisio(flags,activeClinFlags),[flags,activeClinFlags]);
+  const triageOd=useMemo(()=>triageOdonto(flags,activeClinFlags),[flags,activeClinFlags]);
+  const exams=answers.esami_paths||answers.esami_files||[];
   const setODO=(k,x)=>setVal(s=>({...s,visite:(s.visite||[]).map(vi=>vi.id===activeVisitId?{...vi,odontoiatra:{...(vi.odontoiatra||{}),[k]:x}}:vi)}));
   const setFIS=(k,x)=>setVal(s=>({...s,visite:(s.visite||[]).map(vi=>vi.id===activeVisitId?{...vi,fisioterapista:{...(vi.fisioterapista||{}),[k]:x}}:vi)}));
   const setSE=(fase,k,x)=>setVal(s=>({...s,visite:(s.visite||[]).map(vi=>vi.id===activeVisitId?{...vi,semg:{...(vi.semg||{}),[fase]:{...(((vi.semg||{})[fase])||{}),[k]:x}}}:vi)}));
@@ -484,13 +612,13 @@ function PatientSheet({p,token,onClose,onDeleted}){
   const [ai,setAi]=useState(null);const [aiBusy,setAiBusy]=useState(false);const [aiErr,setAiErr]=useState("");
   async function save(){const dati={...v,updated_at:new Date().toISOString()};let ok;if(SUPABASE_URL&&token){ok=await saveValRemote(p.id,dati,token);}else{ok=saveValLocal(p.id,dati);}setSaved(ok?"Valutazione salvata":"Errore di salvataggio");setTimeout(()=>setSaved(""),2600);}
   async function genAI(){setAiErr("");setAiBusy(true);try{
-    const payload={percorso:p.percorso,eta:ageFrom(p.data_nascita),anamnesi:p.answers,
+    const payload={percorso:p.percorso,eta:ageFrom(p.data_nascita),anamnesi:answers,
       flag:allFlags.map(x=>({dominio:x.dominio,livello:x.livello,etichetta:x.etichetta,fonte:x.fonte})),
       odontoiatra:lastVisit.odontoiatra||{},fisioterapista:lastVisit.fisioterapista||{},semg:lastVisit.semg||{}};
     const out=await callAI(payload);setAi(out);
   }catch(e){setAiErr(String(e.message||e));}finally{setAiBusy(false);}}
   async function saveAI(){const dati={...v,ai,updated_at:new Date().toISOString()};setVal(s=>({...s,ai}));let ok;if(SUPABASE_URL&&token){ok=await saveValRemote(p.id,dati,token);}else{ok=saveValLocal(p.id,dati);}setSaved(ok?"Inquadramento salvato nel report":"Errore di salvataggio");setTimeout(()=>setSaved(""),2600);}
-  const TABS=[["report","Anamnesi & report"],["odo","Odontoiatra"],["fisio","Fisioterapista"],["confronto","Confronto visite"],["semg","sEMG"],["ai","Sintesi IA"]];
+  const TABS=[["report","Anamnesi & report"],["specialisti","Altri specialisti"],["odo","Odontoiatra"],["triage","Serve il fisio?"],["fisio","Fisioterapista"],["triage2","Serve l'odontoiatra?"],["confronto","Confronto visite"],["semg","sEMG"],["ai","Sintesi IA"]];
   const done={odo:hasData(activeVisit.odontoiatra),fisio:hasData(activeVisit.fisioterapista),semg:hasData((activeVisit.semg||{}).pre)||hasData((activeVisit.semg||{}).post)};
   const cmpAId=cmpA||(visite[visite.length-2]&&visite[visite.length-2].id)||(visite[0]&&visite[0].id);
   const cmpBId=cmpB||(visite[visite.length-1]&&visite[visite.length-1].id);
@@ -509,7 +637,15 @@ function PatientSheet({p,token,onClose,onDeleted}){
             <button key={k} className={"tab"+(tab===k?" on":"")} onClick={()=>setTab(k)}>{lab}{k!=="report"&&done[k]&&<span className="tg"></span>}</button>))}</div>
 
           {tab==="report"&&<div>
-            <h2>Quadro interdisciplinare</h2>
+            <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+              <h2 style={{flex:1}}>Quadro interdisciplinare</h2>
+              <button className="btn ghost" onClick={()=>setEditingAnamnesi(x=>!x)}>{editingAnamnesi?"\u2715 Chiudi modifica":"\u270E Modifica anamnesi"}</button>
+            </div>
+            {editingAnamnesi?<div>
+              <p className="note" style={{marginTop:4}}>Stai modificando le risposte dell'anamnesi compilata dal paziente. Il quadro e il report si aggiornano di conseguenza.</p>
+              <ClinForm fields={ANAMNESI} data={answers} onSet={setAns} />
+              <div className="savebar"><button className="btn primary" onClick={saveAnamnesi}>Salva anamnesi</button>{savedAns&&<span className="savemsg">{savedAns}</span>}</div>
+            </div>:<div>
             <p className="note" style={{marginTop:4,marginBottom:0}}>Integra anamnesi del paziente + esame clinico + sEMG. Si aggiorna man mano che compili le schede.</p>
             <div className="sem">{grid.map(d=>(<div className="dom" key={d.dominio}><b><span className={"dot "+d.livello}></span>{d.dominio}</b><small>{d.nota}</small>{d.fonti&&d.fonti.length>0&&<div style={{marginTop:6}}><Srcs list={d.fonti} /></div>}</div>))}</div>
             <div className="repsec"><h3>1 \u00b7 Informazioni odontoiatriche rilevanti</h3><ul>{rep.odo.map((x,i)=><li key={i}>{x}</li>)}</ul></div>
@@ -519,6 +655,20 @@ function PatientSheet({p,token,onClose,onDeleted}){
             <div className="repsec"><h3>5 \u00b7 Priorita di valutazione in studio</h3>{rep.priorita.length?<ol>{rep.priorita.map((d,i)=><li key={i}><b>{d.dominio}</b> <span className={"dot "+d.livello}></span> \u2014 {d.nota} <Srcs list={d.fonti} /></li>)}</ol>:<ul><li>Protocollo SSDC standard.</li></ul>}</div>
             {exams.length>0&&<div className="repsec"><h3>Allegati del paziente</h3>{exams.map((e,i)=>{const nm=typeof e==="string"?e:e.name;return(<div className="exam" key={i}><span className="fi">{(nm.split(".").pop()||"").toUpperCase().slice(0,4)}</span><span>{nm}</span></div>);})}</div>}
             {(()=>{const ns=collectNotes({odontoiatra:lastVisit.odontoiatra,fisioterapista:lastVisit.fisioterapista});return ns.length>0?(<div className="repsec"><h3>Note dei clinici (voce per voce)</h3><ul>{ns.map((x,i)=><li key={i}><b>{x.label}</b> <Src f={x.sez} /> \u2014 {x.nota}</li>)}</ul></div>):null;})()}
+            </div>}
+            <div className="repsec"><h3>Nota / conclusione clinica libera</h3>
+              <p className="note" style={{marginTop:0}}>Testo scritto da voi, separato da quanto calcolato automaticamente sopra.</p>
+              <div className="f wide"><textarea style={{minHeight:90}} value={v.nota_report||""} onChange={e=>setVal(s=>({...s,nota_report:e.target.value}))} placeholder="Es. conclusioni della visita, indicazioni concordate col paziente\u2026" /></div>
+              <div className="savebar"><button className="btn primary" onClick={save}>Salva nota</button>{saved&&<span className="savemsg">{saved}</span>}</div>
+            </div>
+          </div>}
+
+          {tab==="specialisti"&&<div>
+            <h2>Altri specialisti da consultare</h2>
+            <p className="note" style={{marginTop:4}}>Suggerimenti calcolati incrociando anamnesi, visita odontoiatrica e fisioterapica (ultima visita disponibile). Sono spunti di lavoro: la decisione finale resta al clinico.</p>
+            {specialisti.length===0?<p className="note">Nessun segnale che al momento suggerisca il coinvolgimento di altri specialisti.</p>:
+              <div className="repsec"><ul>{specialisti.map((s,i)=><li key={i}><span className={"dot "+s.livello}></span> <b>{s.spec}</b> \u2014 {s.motivo}</li>)}</ul></div>}
+            <div className="savebar"><button className="btn ghost" onClick={()=>window.print()}>Stampa / PDF</button></div>
           </div>}
 
           {tab==="odo"&&<div>
@@ -529,12 +679,44 @@ function PatientSheet({p,token,onClose,onDeleted}){
             <div className="savebar"><button className="btn primary" onClick={save}>Salva valutazione</button>{saved&&<span className="savemsg">{saved}</span>}</div>
           </div>}
 
+          {tab==="triage"&&<div>
+            <h2>Serve il fisioterapista?</h2>
+            <p className="note" style={{marginTop:4,marginBottom:0}}>Valutazione basata sull'anamnesi e sulla visita odontoiatrica di questa visita. Pensata per essere mostrata e spiegata al paziente in studio.</p>
+            <VisitBar />
+            <div className={"trafficbig "+triage.livello}>
+              <div className="tbdot"></div>
+              <div className="tbtext">
+                {triage.livello==="verde"&&<><b>Nessun segnale evidente</b><span>Al momento non emergono elementi che richiedano una valutazione fisioterapica.</span></>}
+                {triage.livello==="giallo"&&<><b>Alcuni segnali da monitorare</b><span>Ti consigliamo una valutazione fisioterapica di controllo, anche solo preventiva.</span></>}
+                {triage.livello==="rosso"&&<><b>Segnali significativi</b><span>Ti consigliamo una valutazione fisioterapica specifica, in collaborazione con il percorso odontoiatrico.</span></>}
+              </div>
+            </div>
+            {triage.motivi.length>0&&<div className="repsec"><h3>Cosa abbiamo osservato</h3><ul>{triage.motivi.map((f,i)=><li key={i}>{explainFlag(f.etichetta,FISIO_TRIAGE_SPIEGA)}</li>)}</ul></div>}
+            <div className="savebar"><button className="btn ghost" onClick={()=>window.print()}>Stampa / Mostra al paziente</button></div>
+          </div>}
+
           {tab==="fisio"&&<div>
             <h2>Valutazione fisioterapica</h2>
             <VisitBar />
             {val!==null&&<div className="visitmeta"><label>Data di questa visita <input type="date" value={activeVisit.data||""} onChange={e=>setVisitDate(e.target.value)} /></label>{visite.length>1&&<button className="notebtn" onClick={()=>deleteVisit(activeVisitId)}>Elimina questa visita</button>}</div>}
             {val===null?<p className="note">Caricamento\u2026</p>:<ClinForm fields={FISIO} data={activeVisit.fisioterapista||{}} onSet={setFIS} />}
             <div className="savebar"><button className="btn primary" onClick={save}>Salva valutazione</button>{saved&&<span className="savemsg">{saved}</span>}</div>
+          </div>}
+
+          {tab==="triage2"&&<div>
+            <h2>Serve l'odontoiatra?</h2>
+            <p className="note" style={{marginTop:4,marginBottom:0}}>Valutazione basata sull'anamnesi e sulla visita fisioterapica di questa visita. Pensata per essere mostrata e spiegata al paziente in studio.</p>
+            <VisitBar />
+            <div className={"trafficbig "+triageOd.livello}>
+              <div className="tbdot"></div>
+              <div className="tbtext">
+                {triageOd.livello==="verde"&&<><b>Nessun segnale evidente</b><span>Al momento non emergono elementi che richiedano una valutazione odontoiatrica specifica.</span></>}
+                {triageOd.livello==="giallo"&&<><b>Alcuni segnali da monitorare</b><span>Ti consigliamo una valutazione odontoiatrica di controllo.</span></>}
+                {triageOd.livello==="rosso"&&<><b>Segnali significativi</b><span>Ti consigliamo una valutazione odontoiatrica specifica, in collaborazione con il percorso fisioterapico.</span></>}
+              </div>
+            </div>
+            {triageOd.motivi.length>0&&<div className="repsec"><h3>Cosa abbiamo osservato</h3><ul>{triageOd.motivi.map((f,i)=><li key={i}>{explainFlag(f.etichetta,ODONTO_TRIAGE_SPIEGA)}</li>)}</ul></div>}
+            <div className="savebar"><button className="btn ghost" onClick={()=>window.print()}>Stampa / Mostra al paziente</button></div>
           </div>}
 
           {tab==="confronto"&&<div>
@@ -612,7 +794,7 @@ function PatientSheet({p,token,onClose,onDeleted}){
   );
 }
 
-function Dashboard({patients,demo,token,onLogout,onRefresh,onConfig,onPatientDeleted}){
+function Dashboard({patients,demo,token,onLogout,onRefresh,onConfig,onPatientDeleted,onAnswersUpdated}){
   const [q,setQ]=useState("");const [perc,setPerc]=useState("tutti");const [onlyRed,setOnlyRed]=useState(false);const [sel,setSel]=useState(null);
   const enriched=useMemo(()=>patients.map(p=>{const fl=computeFlags(p.answers);return{...p,_red:fl.filter(f=>f.livello==="rosso").length,_yel:fl.filter(f=>f.livello==="giallo").length};}),[patients]);
   const list=useMemo(()=>enriched.filter(p=>{if(perc!=="tutti"&&p.percorso!==perc)return false;if(onlyRed&&!p._red)return false;if(q){const s=((p.nome||"")+" "+(p.cognome||"")).toLowerCase();if(!s.includes(q.toLowerCase()))return false;}return true;}),[enriched,q,perc,onlyRed]);
@@ -634,7 +816,7 @@ function Dashboard({patients,demo,token,onLogout,onRefresh,onConfig,onPatientDel
         <div className="nm">{p.cognome} {p.nome}</div>
         <div className="sub"><span className={"badge "+p.percorso}>{PERCORSI[p.percorso]}</span><span>{ageFrom(p.data_nascita)??"\u2013"} anni</span><span>\u00b7</span><span>{dfmt(p.created_at)}</span></div></div>
         <div className="right">{p._red>0&&<span className="redtag">{"\u26A0\uFE0F"} {p._red}</span>}<span className="dots">{p._red>0&&<span className="dot rosso"></span>}{p._yel>0&&<span className="dot giallo"></span>}{p._red===0&&p._yel===0&&<span className="dot verde"></span>}</span><span className="chev">{"\u203A"}</span></div></div>))}</div>
-    {sel&&<PatientSheet p={sel} token={token} onClose={()=>setSel(null)} onDeleted={onPatientDeleted} />}
+    {sel&&<PatientSheet p={sel} token={token} onClose={()=>setSel(null)} onDeleted={onPatientDeleted} onAnswersUpdated={onAnswersUpdated} />}
   </div>);
 }
 
@@ -669,8 +851,9 @@ function App(){
   useEffect(()=>{if(!demo)return;const h=()=>setPatients(demoData());window.addEventListener("focus",h);return()=>window.removeEventListener("focus",h);},[demo]);
   async function doLogin(){setErr("");setBusy(true);try{const t=await login(email,pw);setToken(t);const data=await fetchPatients(t);setPatients(data);}catch(e){setErr(String(e.message||e));}finally{setBusy(false);}}
   function handlePatientDeleted(id){setPatients(ps=>ps.filter(p=>p.id!==id));}
+  function handleAnswersUpdated(id,newAnswers){setPatients(ps=>ps.map(p=>p.id===id?{...p,answers:newAnswers}:p));}
   if(setup) return <Setup onClose={()=>setSetup(false)} />;
-  if(demo) return <Dashboard patients={patients} demo token={null} onConfig={()=>setSetup(true)} onRefresh={()=>setPatients(demoData())} onLogout={()=>location.reload()} onPatientDeleted={handlePatientDeleted} />;
+  if(demo) return <Dashboard patients={patients} demo token={null} onConfig={()=>setSetup(true)} onRefresh={()=>setPatients(demoData())} onLogout={()=>location.reload()} onPatientDeleted={handlePatientDeleted} onAnswersUpdated={handleAnswersUpdated} />;
   if(!token) return (<div className="wrap"><div className="topbar"><img className="logo" src={LOGO_SRC} alt="Dr. Sandro Iorio"/><div className="ttl">Gestionale clinico<small>Accesso riservato</small></div></div>
     <div className="login card"><h1>Accedi</h1><p className="note">Riservato al personale dello studio.</p>
       <input type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
@@ -679,7 +862,7 @@ function App(){
       <button className="btn primary" disabled={busy} onClick={doLogin}>{busy?"Accesso\u2026":"Entra"}</button>
       <button className="btn ghost" style={{width:"100%",marginTop:8}} onClick={()=>setSetup(true)}>Configura</button>
       <p className="note">L'utente deve esistere in <b>Auth</b> e avere una riga nella tabella <b>staff</b>.</p></div></div>);
-  return <Dashboard patients={patients} demo={false} token={token} onLogout={()=>{setToken(null);setPatients([]);}} onPatientDeleted={handlePatientDeleted} />;
+  return <Dashboard patients={patients} demo={false} token={token} onLogout={()=>{setToken(null);setPatients([]);}} onPatientDeleted={handlePatientDeleted} onAnswersUpdated={handleAnswersUpdated} />;
 }
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
