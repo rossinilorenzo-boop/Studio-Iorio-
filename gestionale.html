@@ -90,6 +90,15 @@
   .trafficbig .tbtext{display:flex;flex-direction:column;gap:4px}
   .trafficbig .tbtext b{font-family:"Fraunces",serif;font-weight:600;font-size:1.15rem;color:var(--ink)}
   .trafficbig .tbtext span{color:var(--ink2);font-size:.94rem}
+  .diagspec{display:flex;flex-direction:column;gap:12px;margin:10px 0 16px}
+  .diagspec-item{border:1.5px solid var(--line2);border-radius:12px;padding:12px 14px;background:#fff}
+  .diagspec-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .diagspec-row input{flex:1;font:inherit;border:1.5px solid var(--line2);border-radius:9px;padding:8px 10px;outline:none}
+  .diagspec-row input:focus{border-color:var(--cyan)}
+  .diagspec-item textarea{width:100%;font:inherit;border:1.5px solid var(--line2);border-radius:9px;padding:8px 10px;min-height:60px;outline:none}
+  .diagspec-item textarea:focus{border-color:var(--cyan)}
+  .docupload{margin-bottom:8px;display:flex;align-items:center;gap:10px}
+  .doclist{display:flex;flex-direction:column;gap:6px}
   /* form clinico */
   .form{display:grid;grid-template-columns:1fr;gap:16px;margin-top:4px}@media(min-width:640px){.form{grid-template-columns:1fr 1fr}}
   .f label{font-weight:600;font-size:.95rem;display:block;margin-bottom:6px}
@@ -457,6 +466,10 @@ function loadValLocal(id){try{const m=JSON.parse(localStorage.getItem("ssdc_valu
 function saveValLocal(id,dati){try{const m=JSON.parse(localStorage.getItem("ssdc_valutazioni")||"{}");m[id]=dati;localStorage.setItem("ssdc_valutazioni",JSON.stringify(m));return true;}catch(e){return false;}}
 async function loadValRemote(id,token){const r=await fetch(`${SUPABASE_URL}/rest/v1/valutazioni?submission_id=eq.${id}&select=dati`,{headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token}});if(!r.ok)return {};const j=await r.json();return (j[0]&&j[0].dati)||{};}
 async function saveValRemote(id,dati,token){const r=await fetch(`${SUPABASE_URL}/rest/v1/valutazioni?on_conflict=submission_id`,{method:"POST",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token,"Content-Type":"application/json",Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({submission_id:id,dati,updated_at:new Date().toISOString()})});return r.ok;}
+const DOCS_BUCKET="documenti-pazienti";
+async function uploadDocumento(file,path,token){const r=await fetch(`${SUPABASE_URL}/storage/v1/object/${DOCS_BUCKET}/${encodeURIComponent(path)}`,{method:"POST",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token,"Content-Type":file.type||"application/octet-stream","x-upsert":"true"},body:file});return r.ok;}
+async function getSignedUrl(path,token){const r=await fetch(`${SUPABASE_URL}/storage/v1/object/sign/${DOCS_BUCKET}/${encodeURIComponent(path)}`,{method:"POST",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({expiresIn:3600})});if(!r.ok)return null;const j=await r.json();return j.signedURL?`${SUPABASE_URL}/storage/v1${j.signedURL}`:null;}
+async function deleteDocumento(path,token){const r=await fetch(`${SUPABASE_URL}/storage/v1/object/${DOCS_BUCKET}/${encodeURIComponent(path)}`,{method:"DELETE",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token}});return r.ok;}
 async function saveAnswersRemote(id,answers,token){const r=await fetch(`${SUPABASE_URL}/rest/v1/submissions?id=eq.${id}`,{method:"PATCH",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({answers})});return r.ok;}
 async function deletePatientRemote(id,token){await fetch(`${SUPABASE_URL}/rest/v1/valutazioni?submission_id=eq.${id}`,{method:"DELETE",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token}});const r=await fetch(`${SUPABASE_URL}/rest/v1/submissions?id=eq.${id}`,{method:"DELETE",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token}});return r.ok;}
 
@@ -486,6 +499,67 @@ function ClinField({f,val,set}){
         ?<input className="noteinput" placeholder="Nota clinica su questa voce\u2026" value={note} onChange={e=>set(noteKey,e.target.value)} />
         :<button className="notebtn" onClick={()=>setOpenNote(true)}>{"\u270E"} Aggiungi nota</button>}
     </div>}
+  </div>);
+}
+const SPECIALISTI_COMUNI=["Cardiologo","Ortopedico","Neurologo","Otorinolaringoiatra","Gastroenterologo","Pneumologo","Endocrinologo","Reumatologo","Oculista / Optometrista","Dermatologo","Ginecologo","Urologo","Psichiatra / Psicologo","Chirurgo maxillo-facciale","Logopedista","Osteopata","Altro"];
+function DiagnosiSpecialistiTesto({list,onChange}){
+  const items=list||[];
+  function update(i,key,val){onChange(items.map((it,idx)=>idx===i?{...it,[key]:val}:it));}
+  function remove(i){onChange(items.filter((_,idx)=>idx!==i));}
+  function add(){onChange([...items,{specialista:"",sintesi:""}]);}
+  return (<div className="diagspec">
+    {items.map((it,i)=>(<div className="diagspec-item" key={i}>
+      <div className="diagspec-row">
+        <input list="specialisti-list" placeholder="Specialista (es. Cardiologo)" value={it.specialista||""} onChange={e=>update(i,"specialista",e.target.value)} />
+        <button className="notebtn" onClick={()=>remove(i)}>{"\u2715"} Rimuovi</button>
+      </div>
+      <textarea placeholder="Sintesi della diagnosi\u2026" value={it.sintesi||""} onChange={e=>update(i,"sintesi",e.target.value)} />
+    </div>))}
+    <datalist id="specialisti-list">{SPECIALISTI_COMUNI.map(s=><option key={s} value={s} />)}</datalist>
+    <button className="vtab new" onClick={add}>{"+"} Aggiungi diagnosi</button>
+  </div>);
+}
+function DiagnosiDocumenti({list,onChange,patientId,token}){
+  const items=list||[];
+  const [busyIdx,setBusyIdx]=useState(null);
+  const [err,setErr]=useState("");
+  function update(i,key,val){onChange(items.map((it,idx)=>idx===i?{...it,[key]:val}:it));}
+  function removeEntry(i){onChange(items.filter((_,idx)=>idx!==i));}
+  function add(){onChange([...items,{specialista:"",files:[]}]);}
+  async function handleFiles(i,fileList){
+    setErr("");const files=Array.from(fileList||[]);if(!files.length)return;
+    if(SUPABASE_URL&&token){
+      setBusyIdx(i);const uploaded=[];
+      for(const f of files){const path=`${patientId}/${Date.now()}_${f.name}`;const ok=await uploadDocumento(f,path,token);if(ok)uploaded.push({name:f.name,path,size:f.size});}
+      setBusyIdx(null);
+      if(uploaded.length<files.length)setErr("Alcuni file non sono stati caricati. Verifica che il bucket \"documenti-pazienti\" esista su Supabase con i permessi corretti.");
+      update(i,"files",[...(items[i].files||[]),...uploaded]);
+    }else{
+      update(i,"files",[...(items[i].files||[]),...files.map(f=>({name:f.name,path:null,size:f.size}))]);
+    }
+  }
+  async function openFile(f){
+    if(!f.path){alert("Il caricamento reale dei documenti funziona solo con Supabase configurato.");return;}
+    const url=await getSignedUrl(f.path,token);
+    if(url)window.open(url,"_blank");else alert("Impossibile aprire il file.");
+  }
+  async function removeFile(i,fi){
+    const f=items[i].files[fi];
+    if(f.path&&SUPABASE_URL&&token)await deleteDocumento(f.path,token);
+    update(i,"files",items[i].files.filter((_,idx)=>idx!==fi));
+  }
+  return (<div className="diagspec">
+    {items.map((it,i)=>(<div className="diagspec-item" key={i}>
+      <div className="diagspec-row">
+        <input list="specialisti-list" placeholder="Specialista (es. Cardiologo)" value={it.specialista||""} onChange={e=>update(i,"specialista",e.target.value)} />
+        <button className="notebtn" onClick={()=>removeEntry(i)}>{"\u2715"} Rimuovi</button>
+      </div>
+      <div className="docupload"><input type="file" multiple onChange={e=>handleFiles(i,e.target.files)} disabled={busyIdx===i} />{busyIdx===i&&<span className="note">Caricamento\u2026</span>}</div>
+      {(it.files||[]).length>0&&<div className="doclist">{it.files.map((f,fi)=>(<div className="exam" key={fi}><span className="fi">{(f.name.split(".").pop()||"").toUpperCase().slice(0,4)}</span><span onClick={()=>openFile(f)} style={{cursor:"pointer",textDecoration:"underline"}}>{f.name}</span><button className="notebtn" onClick={()=>removeFile(i,fi)}>{"\u2715"}</button></div>))}</div>}
+    </div>))}
+    <datalist id="specialisti-list">{SPECIALISTI_COMUNI.map(s=><option key={s} value={s} />)}</datalist>
+    {err&&<div className="err" style={{marginTop:8}}>{err}</div>}
+    <button className="vtab new" onClick={add}>{"+"} Aggiungi specialista</button>
   </div>);
 }
 function ClinForm({fields,data,onSet}){return <div className="form">{fields.map(f=><ClinField key={f.n} f={f} val={data} set={onSet} />)}</div>;}
@@ -643,10 +717,14 @@ function PatientSheet({p,token,onClose,onDeleted,onAnswersUpdated}){
             </div>
             {editingAnamnesi?<div>
               <p className="note" style={{marginTop:4}}>Stai modificando le risposte dell'anamnesi compilata dal paziente. Il quadro e il report si aggiornano di conseguenza.</p>
+              <div className="grp" style={{borderTop:"none",paddingTop:0,marginTop:0}}>Diagnosi specialistiche pregresse</div>
+              <p className="note" style={{marginTop:0}}>Referti o diagnosi gia ricevute da altri specialisti, utili sia al fisioterapista che all'odontoiatra.</p>
+              <DiagnosiDocumenti list={answers.diagnosi_specialisti} onChange={list=>setAns("diagnosi_specialisti",list)} patientId={p.id} token={token} />
               <ClinForm fields={ANAMNESI} data={answers} onSet={setAns} />
               <div className="savebar"><button className="btn primary" onClick={saveAnamnesi}>Salva anamnesi</button>{savedAns&&<span className="savemsg">{savedAns}</span>}</div>
             </div>:<div>
             <p className="note" style={{marginTop:4,marginBottom:0}}>Integra anamnesi del paziente + esame clinico + sEMG. Si aggiorna man mano che compili le schede.</p>
+            {answers.diagnosi_specialisti&&answers.diagnosi_specialisti.length>0&&<div className="repsec"><h3>Diagnosi specialistiche pregresse</h3><ul>{answers.diagnosi_specialisti.map((d,i)=><li key={i}><b>{d.specialista||"Specialista"}</b>{d.files&&d.files.length>0?" \u2014 "+d.files.length+" documento/i":" \u2014 nessun documento allegato"}</li>)}</ul></div>}
             <div className="sem">{grid.map(d=>(<div className="dom" key={d.dominio}><b><span className={"dot "+d.livello}></span>{d.dominio}</b><small>{d.nota}</small>{d.fonti&&d.fonti.length>0&&<div style={{marginTop:6}}><Srcs list={d.fonti} /></div>}</div>))}</div>
             <div className="repsec"><h3>1 \u00b7 Informazioni odontoiatriche rilevanti</h3><ul>{rep.odo.map((x,i)=><li key={i}>{x}</li>)}</ul></div>
             <div className="repsec"><h3>2 \u00b7 Informazioni muscolo-scheletriche e posturali</h3><ul>{rep.mss.map((x,i)=><li key={i}>{x}</li>)}</ul></div>
@@ -675,6 +753,10 @@ function PatientSheet({p,token,onClose,onDeleted,onAnswersUpdated}){
             <h2>Valutazione odontoiatrica</h2>
             <VisitBar />
             {val!==null&&<div className="visitmeta"><label>Data di questa visita <input type="date" value={activeVisit.data||""} onChange={e=>setVisitDate(e.target.value)} /></label>{visite.length>1&&<button className="notebtn" onClick={()=>deleteVisit(activeVisitId)}>Elimina questa visita</button>}</div>}
+            {val!==null&&<div style={{marginBottom:18}}>
+              <div className="grp" style={{borderTop:"none",paddingTop:0,marginTop:0}}>Diagnosi di altri specialisti rilevanti per questa visita</div>
+              <DiagnosiSpecialistiTesto list={(activeVisit.odontoiatra||{}).diagnosi_specialisti} onChange={list=>setODO("diagnosi_specialisti",list)} />
+            </div>}
             {val===null?<p className="note">Caricamento\u2026</p>:<ClinForm fields={ODO} data={activeVisit.odontoiatra||{}} onSet={setODO} />}
             <div className="savebar"><button className="btn primary" onClick={save}>Salva valutazione</button>{saved&&<span className="savemsg">{saved}</span>}</div>
           </div>}
@@ -699,6 +781,10 @@ function PatientSheet({p,token,onClose,onDeleted,onAnswersUpdated}){
             <h2>Valutazione fisioterapica</h2>
             <VisitBar />
             {val!==null&&<div className="visitmeta"><label>Data di questa visita <input type="date" value={activeVisit.data||""} onChange={e=>setVisitDate(e.target.value)} /></label>{visite.length>1&&<button className="notebtn" onClick={()=>deleteVisit(activeVisitId)}>Elimina questa visita</button>}</div>}
+            {val!==null&&<div style={{marginBottom:18}}>
+              <div className="grp" style={{borderTop:"none",paddingTop:0,marginTop:0}}>Diagnosi di altri specialisti rilevanti per questa visita</div>
+              <DiagnosiSpecialistiTesto list={(activeVisit.fisioterapista||{}).diagnosi_specialisti} onChange={list=>setFIS("diagnosi_specialisti",list)} />
+            </div>}
             {val===null?<p className="note">Caricamento\u2026</p>:<ClinForm fields={FISIO} data={activeVisit.fisioterapista||{}} onSet={setFIS} />}
             <div className="savebar"><button className="btn primary" onClick={save}>Salva valutazione</button>{saved&&<span className="savemsg">{saved}</span>}</div>
           </div>}
