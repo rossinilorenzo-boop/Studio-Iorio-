@@ -308,7 +308,7 @@ function reportClinico(a,flags){const odo=[],mss=[];
   if(!odo.length)odo.push("Nessun elemento odontoiatrico di rilievo riferito.");
   const sint=(a.sintomi||[]).filter(s=>s!=="nessuno");
   if(sint.length)mss.push("Sintomi riferiti: "+sint.join(", ")+(a.nrs!=null?" - NRS "+a.nrs+"/10":"")+(a.dolore_durata?", durata "+L.durata[a.dolore_durata]:"")+".");
-  if(a.dolore_sede&&a.dolore_sede.length)mss.push("Sede del dolore: "+a.dolore_sede.join(", ")+".");
+  if(a.dolore_sede&&a.dolore_sede.length){const sedi=(Array.isArray(a.dolore_sede)?a.dolore_sede:String(a.dolore_sede).split(",")).map(x=>String(x).trim()).filter(Boolean);if(sedi.length)mss.push("Sede del dolore: "+sedi.join(", ")+".");}
   if(a.trauma==="si")mss.push("Trauma cranio-cervicale pregresso"+(a.trauma_incoscienza==="si"?" con perdita di coscienza":"")+(a.trauma_dettaglio?": "+a.trauma_dettaglio:"")+".");
   if(a.attivita_sportiva&&a.attivita_sportiva!=="nessuna")mss.push("Attivita sportiva "+a.attivita_sportiva.replace("_"," ")+(a.sport_quale?" ("+a.sport_quale+")":"")+".");
   if(!mss.length)mss.push("Nessun elemento muscolo-scheletrico/posturale di rilievo riferito.");
@@ -374,7 +374,7 @@ const ANAMNESI=[
  {n:"sintomi",l:"Sintomi riferiti",t:"multi",o:[["cefalea_cervicalgia","Cefalea/cervicalgia"],["dolori_schiena","Dolori alla schiena"],["vertigini","Vertigini"],["dolore_atm","Dolore apertura/chiusura bocca"],["limitazione_apertura","Limitazione apertura orale"],["rumori_articolari","Rumori articolari"],["affaticamento_masticatorio","Affaticamento masticatorio"],["nessuno","Nessun sintomo"]]},
  {n:"nrs",l:"Intensita del dolore (NRS 0–10)",t:"scale10"},
  {n:"dolore_durata",l:"Da quanto tempo",t:"radio",o:[["meno_1_mese","<1 mese"],["1_6_mesi","1–6 mesi"],["oltre_6_mesi",">6 mesi"],["anni","Anni"]]},
- {n:"dolore_sede",l:"Sede del dolore",t:"text",h:"Separa piu zone con una virgola, es. tempie, collo, mandibola"},
+ {n:"dolore_sede",l:"Sede del dolore",t:"list",h:"Separa piu zone con una virgola, es. tempie, collo, mandibola"},
  {n:"__g2",t:"grp",l:"Respirazione e sonno"},
  {n:"respiro_giorno",l:"Respirazione prevalente di giorno",t:"radio",o:[["naso","Nasale"],["bocca","Orale"],["misto","Mista"]]},
  {n:"naso_chiuso",l:"Naso spesso chiuso",t:"radio",o:[["si","Si"],["no","No"]]},
@@ -513,6 +513,17 @@ async function uploadDocumento(file,path,token){const r=await fetch(`${SUPABASE_
 async function getSignedUrl(path,token){const r=await fetch(`${SUPABASE_URL}/storage/v1/object/sign/${DOCS_BUCKET}/${encodeURIComponent(path)}`,{method:"POST",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({expiresIn:3600})});if(!r.ok)return null;const j=await r.json();return j.signedURL?`${SUPABASE_URL}/storage/v1${j.signedURL}`:null;}
 async function deleteDocumento(path,token){const r=await fetch(`${SUPABASE_URL}/storage/v1/object/${DOCS_BUCKET}/${encodeURIComponent(path)}`,{method:"DELETE",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token}});return r.ok;}
 async function saveAnswersRemote(id,answers,token){const r=await fetch(`${SUPABASE_URL}/rest/v1/submissions?id=eq.${id}`,{method:"PATCH",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({answers})});return r.ok;}
+async function createPatientRemote(row,token){
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/submissions`,{method:"POST",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+token,"Content-Type":"application/json",Prefer:"return=representation"},body:JSON.stringify(row)});
+  if(!r.ok){let t="";try{t=await r.text();}catch(e){}throw new Error("Creazione non riuscita ("+r.status+"). Controlla i permessi di inserimento su Supabase. "+t.slice(0,200));}
+  const j=await r.json();const x=Array.isArray(j)?j[0]:j;
+  return {id:x.id,created_at:x.created_at,percorso:x.percorso,answers:x.answers||{},nome:x.nome,cognome:x.cognome,data_nascita:x.data_nascita,sesso:x.sesso,email:x.email,telefono:x.telefono};
+}
+function createPatientLocal(row){
+  const p={...row,id:"loc_"+Date.now(),created_at:new Date().toISOString()};
+  try{localStorage.setItem("ssdc_intakes",JSON.stringify([p,...loadLocal()]));}catch(e){}
+  return p;
+}
 const FREQUENZE_ESERCIZI=["Ogni giorno","2 volte al giorno","3 volte a settimana","1 volta al giorno","Ogni 2/3 ore","Altro"];
 function loadLibreriaLocal(){try{return JSON.parse(localStorage.getItem("ssdc_libreria_esercizi")||"[]");}catch(e){return [];}}
 function saveLibreriaLocal(list){try{localStorage.setItem("ssdc_libreria_esercizi",JSON.stringify(list));return true;}catch(e){return false;}}
@@ -535,6 +546,7 @@ function ClinField({f,val,set}){
   return (<div className={"f"+(f.wide?" wide":"")}>
     <label>{f.l}</label>
     {f.t==="text"&&<input value={v||""} onChange={e=>set(f.n,e.target.value)} />}
+    {f.t==="list"&&<input value={Array.isArray(v)?v.join(","):(v||"")} onChange={e=>set(f.n,e.target.value===""?[]:e.target.value.split(","))} />}
     {f.t==="number"&&<div className="num"><input type="number" value={v||""} onChange={e=>set(f.n,e.target.value)} style={{maxWidth:130}} />{f.u&&<span className="u">{f.u}</span>}</div>}
     {f.t==="textarea"&&<textarea value={v||""} onChange={e=>set(f.n,e.target.value)} />}
     {f.t==="radio"&&<div className="optrow">{f.o.map(o=>{const val=Array.isArray(o)?o[0]:o;const lab=Array.isArray(o)?o[1]:o;return <button key={val} className={"optbtn"+(v===val?" on":"")} onClick={()=>set(f.n,v===val?"":val)}>{lab}</button>;})}</div>}
@@ -1000,7 +1012,51 @@ function PatientSheet({p,token,onClose,onDeleted,onAnswersUpdated}){
   );
 }
 
-function Dashboard({patients,demo,token,onLogout,onRefresh,onConfig,onPatientDeleted,onAnswersUpdated}){
+function NuovoPaziente({token,onClose,onCreated}){
+  const [anag,setAnag]=useState({nome:"",cognome:"",data_nascita:"",sesso:"",email:"",telefono:"",percorso:""});
+  const [answers,setAnswers]=useState({});
+  const [busy,setBusy]=useState(false);const [err,setErr]=useState("");
+  const setA=(k,x)=>setAnag(s=>({...s,[k]:x}));
+  const setAns=(k,x)=>setAnswers(s=>({...s,[k]:x}));
+  async function crea(){
+    setErr("");
+    if(!anag.cognome.trim()||!anag.nome.trim()){setErr("Cognome e nome sono obbligatori.");return;}
+    if(!anag.percorso){setErr("Scegli il percorso.");return;}
+    setBusy(true);
+    try{
+      const row={nome:anag.nome.trim(),cognome:anag.cognome.trim(),data_nascita:anag.data_nascita||null,sesso:anag.sesso||null,email:anag.email.trim()||null,telefono:anag.telefono.trim()||null,percorso:anag.percorso,answers:{...answers,percorso:anag.percorso}};
+      const created=(SUPABASE_URL&&token)?await createPatientRemote(row,token):createPatientLocal(row);
+      onCreated(created);
+    }catch(e){setErr(String(e.message||e));setBusy(false);}
+  }
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet" onClick={e=>e.stopPropagation()}>
+        <div className="head"><div className="sp"><h1 style={{margin:".25em 0 0"}}>Nuovo paziente</h1><div className="kv"><span>Inserisci i dati e compila l'anamnesi insieme al paziente</span></div></div><button className="close" onClick={onClose}>{"×"}</button></div>
+        <div className="card">
+          <h2 style={{marginTop:0}}>Anagrafica</h2>
+          <div className="form">
+            <div className="f"><label>Cognome *</label><input value={anag.cognome} onChange={e=>setA("cognome",e.target.value)} /></div>
+            <div className="f"><label>Nome *</label><input value={anag.nome} onChange={e=>setA("nome",e.target.value)} /></div>
+            <div className="f"><label>Data di nascita</label><input type="date" value={anag.data_nascita} onChange={e=>setA("data_nascita",e.target.value)} /></div>
+            <div className="f"><label>Sesso</label><div className="optrow">{[["m","M"],["f","F"]].map(([k,l])=><button key={k} className={"optbtn"+(anag.sesso===k?" on":"")} onClick={()=>setA("sesso",anag.sesso===k?"":k)}>{l}</button>)}</div></div>
+            <div className="f"><label>Telefono</label><input type="tel" value={anag.telefono} onChange={e=>setA("telefono",e.target.value)} /></div>
+            <div className="f"><label>Email</label><input type="email" value={anag.email} onChange={e=>setA("email",e.target.value)} /></div>
+            <div className="f wide"><label>Percorso *</label><div className="optrow">{Object.entries(PERCORSI).map(([k,l])=><button key={k} className={"optbtn"+(anag.percorso===k?" on":"")} onClick={()=>setA("percorso",k)}>{l}</button>)}</div></div>
+          </div>
+          <h2 style={{marginTop:26}}>Anamnesi</h2>
+          <p className="note" style={{marginTop:0}}>Tutte le risposte si possono modificare in seguito dalla scheda del paziente (dove potrai anche allegare i documenti degli specialisti).</p>
+          <ClinForm fields={ANAMNESI} data={answers} onSet={setAns} />
+          {err&&<div className="err" style={{marginTop:14}}>{err}</div>}
+          <div className="savebar"><button className="btn primary" disabled={busy} onClick={crea}>{busy?"Creazione…":"Crea paziente"}</button><button className="btn ghost" onClick={onClose}>Annulla</button></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({patients,demo,token,onLogout,onRefresh,onConfig,onPatientDeleted,onAnswersUpdated,onPatientCreated}){
+  const [showNew,setShowNew]=useState(false);
   const [q,setQ]=useState("");const [perc,setPerc]=useState("tutti");const [onlyRed,setOnlyRed]=useState(false);const [sel,setSel]=useState(null);
   const enriched=useMemo(()=>patients.map(p=>{const fl=computeFlags(p.answers);return{...p,_red:fl.filter(f=>f.livello==="rosso").length,_yel:fl.filter(f=>f.livello==="giallo").length};}),[patients]);
   const list=useMemo(()=>enriched.filter(p=>{if(perc!=="tutti"&&p.percorso!==perc)return false;if(onlyRed&&!p._red)return false;if(q){const s=((p.nome||"")+" "+(p.cognome||"")).toLowerCase();if(!s.includes(q.toLowerCase()))return false;}return true;}),[enriched,q,perc,onlyRed]);
@@ -1008,6 +1064,7 @@ function Dashboard({patients,demo,token,onLogout,onRefresh,onConfig,onPatientDel
   return (<div className="wrap">
     <div className="topbar"><img className="logo" src={LOGO_SRC} alt="Dr. Sandro Iorio"/><div className="ttl">Gestionale clinico<small>Pazienti schedati · SSDC</small></div><div className="sp"></div>
       {demo&&<span className="demo-pill">Demo</span>}{demo&&onConfig&&<button className="chip" onClick={onConfig}>{"⚙"} Configura</button>}{demo&&onRefresh&&<button className="chip" onClick={onRefresh}>{"↻"} Aggiorna</button>}
+      <button className="chip on" onClick={()=>setShowNew(true)}>{"+"} Nuovo paziente</button>
       <button className="chip" onClick={onLogout}>{demo?"Esci":"Logout"}</button></div>
     <div className="stats">
       <div className="stat"><div className="n">{stats.tot}</div><div className="l">Pazienti totali</div></div>
@@ -1022,6 +1079,7 @@ function Dashboard({patients,demo,token,onLogout,onRefresh,onConfig,onPatientDel
         <div className="nm">{p.cognome} {p.nome}</div>
         <div className="sub"><span className={"badge "+p.percorso}>{PERCORSI[p.percorso]}</span><span>{ageFrom(p.data_nascita)??"–"} anni</span><span>·</span><span>{dfmt(p.created_at)}</span></div></div>
         <div className="right">{p._red>0&&<span className="redtag">{"⚠️"} {p._red}</span>}<span className="dots">{p._red>0&&<span className="dot rosso"></span>}{p._yel>0&&<span className="dot giallo"></span>}{p._red===0&&p._yel===0&&<span className="dot verde"></span>}</span><span className="chev">{"›"}</span></div></div>))}</div>
+    {showNew&&<NuovoPaziente token={token} onClose={()=>setShowNew(false)} onCreated={p=>{if(onPatientCreated)onPatientCreated(p);setShowNew(false);setSel(p);}} />}
     {sel&&<PatientSheet p={sel} token={token} onClose={()=>setSel(null)} onDeleted={onPatientDeleted} onAnswersUpdated={onAnswersUpdated} />}
   </div>);
 }
@@ -1057,9 +1115,10 @@ function App(){
   useEffect(()=>{if(!demo)return;const h=()=>setPatients(demoData());window.addEventListener("focus",h);return()=>window.removeEventListener("focus",h);},[demo]);
   async function doLogin(){setErr("");setBusy(true);try{const t=await login(email,pw);setToken(t);const data=await fetchPatients(t);setPatients(data);}catch(e){setErr(String(e.message||e));}finally{setBusy(false);}}
   function handlePatientDeleted(id){setPatients(ps=>ps.filter(p=>p.id!==id));}
+  function handlePatientCreated(p){setPatients(ps=>[p,...ps]);}
   function handleAnswersUpdated(id,newAnswers){setPatients(ps=>ps.map(p=>p.id===id?{...p,answers:newAnswers}:p));}
   if(setup) return <Setup onClose={()=>setSetup(false)} />;
-  if(demo) return <Dashboard patients={patients} demo token={null} onConfig={()=>setSetup(true)} onRefresh={()=>setPatients(demoData())} onLogout={()=>location.reload()} onPatientDeleted={handlePatientDeleted} onAnswersUpdated={handleAnswersUpdated} />;
+  if(demo) return <Dashboard patients={patients} demo token={null} onConfig={()=>setSetup(true)} onRefresh={()=>setPatients(demoData())} onLogout={()=>location.reload()} onPatientDeleted={handlePatientDeleted} onAnswersUpdated={handleAnswersUpdated} onPatientCreated={handlePatientCreated} />;
   if(!token) return (<div className="wrap"><div className="topbar"><img className="logo" src={LOGO_SRC} alt="Dr. Sandro Iorio"/><div className="ttl">Gestionale clinico<small>Accesso riservato</small></div></div>
     <div className="login card"><h1>Accedi</h1><p className="note">Riservato al personale dello studio.</p>
       <input type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
@@ -1068,7 +1127,7 @@ function App(){
       <button className="btn primary" disabled={busy} onClick={doLogin}>{busy?"Accesso…":"Entra"}</button>
       <button className="btn ghost" style={{width:"100%",marginTop:8}} onClick={()=>setSetup(true)}>Configura</button>
       <p className="note">L'utente deve esistere in <b>Auth</b> e avere una riga nella tabella <b>staff</b>.</p></div></div>);
-  return <Dashboard patients={patients} demo={false} token={token} onLogout={()=>{setToken(null);setPatients([]);}} onPatientDeleted={handlePatientDeleted} onAnswersUpdated={handleAnswersUpdated} />;
+  return <Dashboard patients={patients} demo={false} token={token} onLogout={()=>{setToken(null);setPatients([]);}} onPatientDeleted={handlePatientDeleted} onAnswersUpdated={handleAnswersUpdated} onPatientCreated={handlePatientCreated} />;
 }
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
