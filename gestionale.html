@@ -115,6 +115,8 @@
   .exercard p{color:var(--ink2);font-size:.9rem;margin:6px 0}
   .exercard a{color:var(--cyan-d);font-weight:700;font-size:.86rem;text-decoration:none}
   .exercard a:hover{text-decoration:underline}
+  .exeredit textarea,.exeredit>input{width:100%;font:inherit;border:1.5px solid var(--line2);border-radius:9px;padding:8px 10px;margin-top:8px;outline:none}
+  .exeredit textarea{min-height:90px;resize:vertical}
   /* form clinico */
   .form{display:grid;grid-template-columns:1fr;gap:16px;margin-top:4px}@media(min-width:640px){.form{grid-template-columns:1fr 1fr}}
   .f label{font-weight:600;font-size:.95rem;display:block;margin-bottom:6px}
@@ -748,13 +750,15 @@ function PatientSheet({p,token,onClose,onDeleted,onAnswersUpdated}){
   const [libreria,setLibreria]=useState(null);
   useEffect(()=>{let go=true;(async()=>{let l=[];if(SUPABASE_URL&&token){try{l=await loadLibreriaRemote(token);}catch(e){l=[];}}else{l=loadLibreriaLocal();}if(go)setLibreria(l);})();return()=>{go=false;};},[]);
   async function saveLibreria(newList){setLibreria(newList);if(SUPABASE_URL&&token){await saveLibreriaRemote(newList,token);}else{saveLibreriaLocal(newList);}}
-  const [nuovoEs,setNuovoEs]=useState({nome:"",icona:"",frequenza:"Ogni giorno",dettaglio_frequenza:"",descrizione:"",video:""});
-  function aggiungiInLibreria(){if(!nuovoEs.nome)return;saveLibreria([...(libreria||[]),{...nuovoEs,id:"ex"+Date.now()}]);setNuovoEs({nome:"",icona:"",frequenza:"Ogni giorno",dettaglio_frequenza:"",descrizione:"",video:""});}
+  const [nuovoEs,setNuovoEs]=useState({nome:"",icona:"",frequenza:"Ogni giorno",dettaglio_frequenza:"",recupero:"",descrizione:"",video:""});
+  function aggiungiInLibreria(){if(!nuovoEs.nome)return;saveLibreria([...(libreria||[]),{...nuovoEs,id:"ex"+Date.now()}]);setNuovoEs({nome:"",icona:"",frequenza:"Ogni giorno",dettaglio_frequenza:"",recupero:"",descrizione:"",video:""});}
   function rimuoviDallaLibreria(id){if(!window.confirm("Rimuovere questo esercizio dalla libreria? Non tocca i programmi gia assegnati ai pazienti."))return;saveLibreria((libreria||[]).filter(e=>e.id!==id));}
   function assegnaAlPaziente(es){setVal(s=>({...s,programma_esercizi:[...(s.programma_esercizi||[]),{...es,assignedId:"a"+Date.now()}]}));}
+  const [editEsId,setEditEsId]=useState(null);
+  function modificaEsercizioPaziente(assignedId,campo,valore){setVal(s=>({...s,programma_esercizi:(s.programma_esercizi||[]).map(e=>e.assignedId===assignedId?{...e,[campo]:valore}:e)}));}
   function rimuoviDalPaziente(assignedId){setVal(s=>({...s,programma_esercizi:(s.programma_esercizi||[]).filter(e=>e.assignedId!==assignedId)}));}
-  const [nuovoEsPersonale,setNuovoEsPersonale]=useState({nome:"",icona:"",frequenza:"Ogni giorno",dettaglio_frequenza:"",descrizione:"",video:""});
-  function aggiungiPersonalizzatoAlPaziente(){if(!nuovoEsPersonale.nome)return;setVal(s=>({...s,programma_esercizi:[...(s.programma_esercizi||[]),{...nuovoEsPersonale,assignedId:"a"+Date.now()}]}));setNuovoEsPersonale({nome:"",icona:"",frequenza:"Ogni giorno",dettaglio_frequenza:"",descrizione:"",video:""});}
+  const [nuovoEsPersonale,setNuovoEsPersonale]=useState({nome:"",icona:"",frequenza:"Ogni giorno",dettaglio_frequenza:"",recupero:"",descrizione:"",video:""});
+  function aggiungiPersonalizzatoAlPaziente(){if(!nuovoEsPersonale.nome)return;setVal(s=>({...s,programma_esercizi:[...(s.programma_esercizi||[]),{...nuovoEsPersonale,assignedId:"a"+Date.now()}]}));setNuovoEsPersonale({nome:"",icona:"",frequenza:"Ogni giorno",dettaglio_frequenza:"",recupero:"",descrizione:"",video:""});}
   async function save(){const dati={...v,updated_at:new Date().toISOString()};let ok;if(SUPABASE_URL&&token){ok=await saveValRemote(p.id,dati,token);}else{ok=saveValLocal(p.id,dati);}setSaved(ok?"Valutazione salvata":"Errore di salvataggio");setTimeout(()=>setSaved(""),2600);}
   async function genAI(){setAiErr("");setAiBusy(true);try{
     const payload={percorso:p.percorso,eta:ageFrom(p.data_nascita),anamnesi:answers,
@@ -935,18 +939,19 @@ function PatientSheet({p,token,onClose,onDeleted,onAnswersUpdated}){
                   <input placeholder="Nome esercizio" value={nuovoEs.nome} onChange={e=>setNuovoEs({...nuovoEs,nome:e.target.value})} />
                   <input placeholder="Emoji (facoltativa)" value={nuovoEs.icona} onChange={e=>setNuovoEs({...nuovoEs,icona:e.target.value})} style={{maxWidth:110}} />
                   <select value={nuovoEs.frequenza} onChange={e=>setNuovoEs({...nuovoEs,frequenza:e.target.value})}>{FREQUENZE_ESERCIZI.map(f=><option key={f} value={f}>{f}</option>)}</select>
-                  <input placeholder="Dettaglio (es. 2\u00d710, 3-5 minuti)" value={nuovoEs.dettaglio_frequenza} onChange={e=>setNuovoEs({...nuovoEs,dettaglio_frequenza:e.target.value})} />
+                  <input placeholder="Serie × ripetizioni / durata (es. 2×10)" value={nuovoEs.dettaglio_frequenza} onChange={e=>setNuovoEs({...nuovoEs,dettaglio_frequenza:e.target.value})} />
+                  <input placeholder="Recupero (es. 60″)" value={nuovoEs.recupero||""} onChange={e=>setNuovoEs({...nuovoEs,recupero:e.target.value})} style={{maxWidth:150}} />
                 </div>
-                <textarea placeholder="Descrizione / istruzioni\u2026" value={nuovoEs.descrizione} onChange={e=>setNuovoEs({...nuovoEs,descrizione:e.target.value})} />
+                <textarea placeholder="Descrizione / istruzioni…" value={nuovoEs.descrizione} onChange={e=>setNuovoEs({...nuovoEs,descrizione:e.target.value})} />
                 <input placeholder="Link video (facoltativo)" value={nuovoEs.video} onChange={e=>setNuovoEs({...nuovoEs,video:e.target.value})} />
                 <div className="savebar" style={{marginTop:10}}><button className="btn primary" onClick={aggiungiInLibreria}>{"+"} Salva in libreria</button></div>
               </div>
-              {libreria===null?<p className="note">Caricamento libreria\u2026</p>:libreria.length===0?<p className="note">Nessun esercizio in libreria. Aggiungine uno sopra.</p>:
+              {libreria===null?<p className="note">Caricamento libreria…</p>:libreria.length===0?<p className="note">Nessun esercizio in libreria. Aggiungine uno sopra.</p>:
                 <div className="liblist">{libreria.map(es=>(<div className="libitem" key={es.id}>
-                  <div><b>{es.icona?es.icona+" ":""}{es.nome}</b><small> \u00b7 {es.frequenza}{es.dettaglio_frequenza?" \u00b7 "+es.dettaglio_frequenza:""}</small></div>
+                  <div><b>{es.icona?es.icona+" ":""}{es.nome}</b><small> · {es.frequenza}{es.dettaglio_frequenza?" · "+es.dettaglio_frequenza:""}</small></div>
                   <div style={{display:"flex",gap:8}}>
                     <button className="btn ghost" onClick={()=>assegnaAlPaziente(es)}>{"+"} Assegna</button>
-                    <button className="notebtn" onClick={()=>rimuoviDallaLibreria(es.id)}>{"\u2715"}</button>
+                    <button className="notebtn" onClick={()=>rimuoviDallaLibreria(es.id)}>{"✕"}</button>
                   </div>
                 </div>))}</div>}
             </div>
@@ -959,9 +964,10 @@ function PatientSheet({p,token,onClose,onDeleted,onAnswersUpdated}){
                   <input placeholder="Nome esercizio" value={nuovoEsPersonale.nome} onChange={e=>setNuovoEsPersonale({...nuovoEsPersonale,nome:e.target.value})} />
                   <input placeholder="Emoji" value={nuovoEsPersonale.icona} onChange={e=>setNuovoEsPersonale({...nuovoEsPersonale,icona:e.target.value})} style={{maxWidth:110}} />
                   <select value={nuovoEsPersonale.frequenza} onChange={e=>setNuovoEsPersonale({...nuovoEsPersonale,frequenza:e.target.value})}>{FREQUENZE_ESERCIZI.map(f=><option key={f} value={f}>{f}</option>)}</select>
-                  <input placeholder="Dettaglio" value={nuovoEsPersonale.dettaglio_frequenza} onChange={e=>setNuovoEsPersonale({...nuovoEsPersonale,dettaglio_frequenza:e.target.value})} />
+                  <input placeholder="Serie × ripetizioni / durata" value={nuovoEsPersonale.dettaglio_frequenza} onChange={e=>setNuovoEsPersonale({...nuovoEsPersonale,dettaglio_frequenza:e.target.value})} />
+                  <input placeholder="Recupero" value={nuovoEsPersonale.recupero||""} onChange={e=>setNuovoEsPersonale({...nuovoEsPersonale,recupero:e.target.value})} style={{maxWidth:150}} />
                 </div>
-                <textarea placeholder="Descrizione / istruzioni\u2026" value={nuovoEsPersonale.descrizione} onChange={e=>setNuovoEsPersonale({...nuovoEsPersonale,descrizione:e.target.value})} />
+                <textarea placeholder="Descrizione / istruzioni…" value={nuovoEsPersonale.descrizione} onChange={e=>setNuovoEsPersonale({...nuovoEsPersonale,descrizione:e.target.value})} />
                 <input placeholder="Link video (facoltativo)" value={nuovoEsPersonale.video} onChange={e=>setNuovoEsPersonale({...nuovoEsPersonale,video:e.target.value})} />
                 <div className="savebar" style={{marginTop:10}}><button className="btn primary" onClick={aggiungiPersonalizzatoAlPaziente}>{"+"} Aggiungi al programma</button></div>
               </div>
@@ -974,10 +980,21 @@ function PatientSheet({p,token,onClose,onDeleted,onAnswersUpdated}){
                   <div key={freq} style={{marginBottom:16}}>
                     <div className="grp" style={{borderTop:"none",paddingTop:0}}>{freq}</div>
                     <div className="exercgrid">{list.map((es,i)=>(<div className="exercard" key={es.assignedId||i}>
-                      <div className="exercard-head"><b>{es.icona?es.icona+" ":""}{es.nome}</b><button className="notebtn" onClick={()=>rimuoviDalPaziente(es.assignedId)}>{"\u2715"}</button></div>
-                      {es.dettaglio_frequenza&&<div className="exercard-meta">{es.dettaglio_frequenza}</div>}
+                      <div className="exercard-head"><b>{es.icona?es.icona+" ":""}{es.nome}</b><span style={{display:"flex",gap:6}}><button className="notebtn" onClick={()=>setEditEsId(editEsId===es.assignedId?null:es.assignedId)}>{editEsId===es.assignedId?"Fatto":"✎ Modifica"}</button><button className="notebtn" onClick={()=>rimuoviDalPaziente(es.assignedId)}>{"✕"}</button></span></div>
+                      {editEsId===es.assignedId?(<div className="exeredit">
+                        <div className="exerform">
+                          <input placeholder="Serie × ripetizioni / durata" value={es.dettaglio_frequenza||""} onChange={e=>modificaEsercizioPaziente(es.assignedId,"dettaglio_frequenza",e.target.value)} />
+                          <input placeholder="Recupero" value={es.recupero||""} onChange={e=>modificaEsercizioPaziente(es.assignedId,"recupero",e.target.value)} style={{maxWidth:150}} />
+                          <select value={es.frequenza||"Altro"} onChange={e=>modificaEsercizioPaziente(es.assignedId,"frequenza",e.target.value)}>{FREQUENZE_ESERCIZI.map(f=><option key={f} value={f}>{f}</option>)}</select>
+                        </div>
+                        <textarea placeholder="Descrizione / istruzioni…" value={es.descrizione||""} onChange={e=>modificaEsercizioPaziente(es.assignedId,"descrizione",e.target.value)} />
+                        <input placeholder="Link video (facoltativo)" value={es.video||""} onChange={e=>modificaEsercizioPaziente(es.assignedId,"video",e.target.value)} />
+                        <div className="h" style={{marginTop:6}}>Le modifiche valgono solo per questo paziente: l'esercizio in libreria non cambia. Ricorda di premere "Salva programma".</div>
+                      </div>):(<div>
+                      {(es.dettaglio_frequenza||es.recupero)&&<div className="exercard-meta">{[es.dettaglio_frequenza,es.recupero?"Recupero "+es.recupero:""].filter(Boolean).join(" · ")}</div>}
                       {es.descrizione&&<p>{es.descrizione}</p>}
-                      {es.video&&<a href={es.video} target="_blank" rel="noreferrer">{"\u25B6"} Guarda il video</a>}
+                      {es.video&&<a href={es.video} target="_blank" rel="noreferrer">{"▶"} Guarda il video</a>}
+                      </div>)}
                     </div>))}</div>
                   </div>
                 ))}
